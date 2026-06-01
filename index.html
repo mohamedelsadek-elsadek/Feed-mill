@@ -598,9 +598,180 @@ db.goOnline();
 
 // Current authenticated user
 let currentUser = null;
+let currentUserRole = 'viewer'; // default until loaded
+let allUsers = {}; // {email: {role, name, addedAt, addedBy}}
 let isOnline = navigator.onLine;
 let dataLoaded = false;
+let rolesLoaded = false;
 let firebaseListenersActive = false;
+
+// ============================================================
+// ROLES & PERMISSIONS
+// ============================================================
+const ROLES = {
+  admin: {
+    label: 'مدير النظام',
+    icon: '👑',
+    color: 'red',
+    can: ['*'], // can do everything
+  },
+  accountant: {
+    label: 'محاسب',
+    icon: '💰',
+    color: 'green',
+    can: ['view_all', 'edit_sales', 'edit_customers', 'view_reports', 'export'],
+  },
+  warehouse: {
+    label: 'مدير مخزن',
+    icon: '📦',
+    color: 'blue',
+    can: ['view_all', 'edit_inventory', 'edit_movements', 'edit_production'],
+  },
+  operator: {
+    label: 'مشغل إنتاج',
+    icon: '👷',
+    color: 'orange',
+    can: ['view_all', 'edit_production'],
+  },
+  viewer: {
+    label: 'مشاهد',
+    icon: '👀',
+    color: 'gray',
+    can: ['view_all'],
+  },
+};
+
+function canDo(action) {
+  if (!currentUserRole || !ROLES[currentUserRole]) return false;
+  const perms = ROLES[currentUserRole].can;
+  return perms.includes('*') || perms.includes(action);
+}
+
+function isAdmin() {
+  return currentUserRole === 'admin';
+}
+
+// ============================================================
+// AUTOMATIC DAILY BACKUP
+// ============================================================
+function todayKey() {
+  return new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+}
+
+async function checkAndCreateDailyBackup() {
+  if (!currentUser || !state || !dataLoaded) return;
+  try {
+    const today = todayKey();
+    const backupRef = db.ref(`backups/${today}`);
+    const snap = await backupRef.once('value');
+
+    if (!snap.exists()) {
+      // No backup today yet - create one
+      await backupRef.set({
+        data: state,
+        createdAt: new Date().toISOString(),
+        createdBy: currentUser.email,
+      });
+      console.log('✅ Daily backup created:', today);
+      // Cleanup old backups (keep last 30 days)
+      await cleanupOldBackups();
+    }
+  } catch (err) {
+    console.error('Backup failed:', err);
+  }
+}
+
+async function cleanupOldBackups() {
+  try {
+    const snap = await db.ref('backups').once('value');
+    const all = snap.val() || {};
+    const dates = Object.keys(all).sort(); // ascending
+    const today = new Date();
+    const cutoff = new Date(today);
+    cutoff.setDate(cutoff.getDate() - 30); // keep 30 days
+    const cutoffStr = cutoff.toISOString().split('T')[0];
+
+    const toDelete = dates.filter(d => d < cutoffStr);
+    for (const d of toDelete) {
+      await db.ref(`backups/${d}`).remove();
+      console.log('🗑️ Deleted old backup:', d);
+    }
+  } catch (err) {
+    console.error('Cleanup failed:', err);
+  }
+}
+
+async function manualBackup() {
+  if (!currentUser) return;
+  const today = todayKey();
+  const time = new Date().toISOString().split('T')[1].split('.')[0].replace(/:/g, '-');
+  const key = `${today}_${time}_manual`;
+  try {
+    await db.ref(`backups/${key}`).set({
+      data: state,
+      createdAt: new Date().toISOString(),
+      createdBy: currentUser.email,
+      manual: true,
+    });
+    alert(`✅ تم إنشاء نسخة احتياطية يدوية:\n${key}`);
+    render();
+  } catch (err) {
+    alert('فشل إنشاء النسخة الاحتياطية: ' + err.message);
+  }
+}
+
+async function listBackups() {
+  try {
+    const snap = await db.ref('backups').once('value');
+    const all = snap.val() || {};
+    return Object.entries(all)
+      .map(([key, val]) => ({ key, ...val }))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  } catch (err) {
+    console.error('List backups failed:', err);
+    return [];
+  }
+}
+
+async function restoreBackup(backupKey) {
+  if (!isAdmin()) { alert('⛔ هذه العملية متاحة للأدمن فقط'); return; }
+  if (!confirm(`⚠️ تحذير شديد:\n\nسيتم استبدال كل البيانات الحالية بالنسخة الاحتياطية:\n${backupKey}\n\nهذا الإجراء لا يمكن التراجع عنه!\n\nهل أنت متأكد تماماً؟`)) return;
+  if (!confirm('تأكيد أخير: هل ترغب فعلاً في استرجاع هذه النسخة؟')) return;
+
+  try {
+    const snap = await db.ref(`backups/${backupKey}`).once('value');
+    const backup = snap.val();
+    if (!backup || !backup.data) { alert('النسخة الاحتياطية غير موجودة'); return; }
+
+    // Create emergency backup before restore
+    const emergencyKey = `${todayKey()}_pre-restore_${Date.now()}`;
+    await db.ref(`backups/${emergencyKey}`).set({
+      data: state,
+      createdAt: new Date().toISOString(),
+      createdBy: currentUser.email,
+      note: 'تلقائية قبل الاسترجاع',
+    });
+
+    // Restore
+    await db.ref('erp_data').set(backup.data);
+    alert(`✅ تم استرجاع البيانات بنجاح من النسخة:\n${backupKey}\n\nتم حفظ نسخة طارئة من البيانات السابقة قبل الاسترجاع.`);
+    render();
+  } catch (err) {
+    alert('فشل الاسترجاع: ' + err.message);
+  }
+}
+
+async function deleteBackup(backupKey) {
+  if (!isAdmin()) { alert('⛔ هذه العملية متاحة للأدمن فقط'); return; }
+  if (!confirm(`حذف النسخة الاحتياطية "${backupKey}" نهائياً؟`)) return;
+  try {
+    await db.ref(`backups/${backupKey}`).remove();
+    alert('✅ تم حذف النسخة');
+    render();
+  } catch (err) {
+    alert('فشل الحذف: ' + err.message);
+  }
+}
 
 window.addEventListener('online', () => { isOnline = true; updateSyncStatus(); });
 window.addEventListener('offline', () => { isOnline = false; updateSyncStatus(); });
@@ -728,10 +899,10 @@ function setupFirebaseSync() {
   if (firebaseListenersActive) return;
   firebaseListenersActive = true;
 
+  // Listen to ERP data
   db.ref('erp_data').on('value', (snapshot) => {
     const data = snapshot.val();
     if (data) {
-      // Merge with defaults (in case schema changed)
       state = {
         materials: data.materials || DEFAULT_DATA.materials,
         formulas: data.formulas || DEFAULT_DATA.formulas,
@@ -739,21 +910,81 @@ function setupFirebaseSync() {
         movements: data.movements || DEFAULT_DATA.movements,
         sales: data.sales || DEFAULT_DATA.sales || [],
       };
-      // Ensure production records have customer field
       state.production.forEach(p => {
         if (p.customer === undefined) p.customer = '';
       });
     } else {
-      // First time - upload default data
       state = JSON.parse(JSON.stringify(DEFAULT_DATA));
       db.ref('erp_data').set(state);
     }
     dataLoaded = true;
-    if (currentUser) render();
+    // Trigger daily backup check (won't block UI)
+    setTimeout(checkAndCreateDailyBackup, 2000);
+    if (currentUser && rolesLoaded) render();
   }, (err) => {
     console.error('Firebase read failed:', err);
     alert('فشل قراءة البيانات: ' + err.message);
   });
+
+  // Listen to users/roles list
+  db.ref('users').on('value', (snapshot) => {
+    const users = snapshot.val() || {};
+
+    // First time setup: if no users exist, make first 3 admins
+    if (Object.keys(users).length === 0 && currentUser) {
+      // Auto-bootstrap: make the current user an admin
+      const emailKey = emailToKey(currentUser.email);
+      db.ref(`users/${emailKey}`).set({
+        email: currentUser.email,
+        role: 'admin',
+        name: currentUser.email.split('@')[0],
+        addedAt: new Date().toISOString(),
+        addedBy: 'system (auto)',
+      });
+      // Also add the other 2 known admins
+      const knownAdmins = [
+        'ahmedelsadek1239@gmail.com',
+        'mohamedelsadek1239@gmail.com',
+        'vetmohamedelsadek@gmail.com',
+      ];
+      knownAdmins.forEach(email => {
+        if (email !== currentUser.email) {
+          db.ref(`users/${emailToKey(email)}`).set({
+            email,
+            role: 'admin',
+            name: email.split('@')[0],
+            addedAt: new Date().toISOString(),
+            addedBy: 'system (auto)',
+          });
+        }
+      });
+      return; // will re-trigger via listener
+    }
+
+    allUsers = users;
+    // Find current user's role
+    const myKey = emailToKey(currentUser?.email || '');
+    const myRecord = users[myKey];
+    if (myRecord) {
+      currentUserRole = myRecord.role || 'viewer';
+    } else {
+      currentUserRole = 'viewer'; // unknown user = viewer only
+    }
+    rolesLoaded = true;
+    if (currentUser && dataLoaded) render();
+  }, (err) => {
+    console.error('Users read failed:', err);
+    rolesLoaded = true;
+    if (currentUser && dataLoaded) render();
+  });
+}
+
+// Convert email to a valid Firebase key (replace . with ,)
+function emailToKey(email) {
+  return email.replace(/\./g, ',').replace(/@/g, '_at_');
+}
+function keyToEmail(key) {
+  return key.replace(/_at_/g, '@').replace(/,/g, '.');
 }
 
 function resetData() {
@@ -877,10 +1108,13 @@ function showLoginError(msg) {
 
 function doLogout() {
   if (!confirm('هل تريد تسجيل الخروج؟')) return;
-  // Detach listeners
   db.ref('erp_data').off();
+  db.ref('users').off();
   firebaseListenersActive = false;
   dataLoaded = false;
+  rolesLoaded = false;
+  currentUserRole = 'viewer';
+  allUsers = {};
   auth.signOut().then(() => {
     currentUser = null;
     render();
@@ -958,6 +1192,10 @@ function renderSidebar() {
     { id: 'sales', icon: '💰', label: 'المبيعات' },
     { id: 'calculator', icon: '🧮', label: 'حاسبة الإنتاج' },
     { id: 'reports', icon: '📈', label: 'التقارير' },
+    ...(isAdmin() ? [
+      { id: 'users', icon: '👥', label: 'المستخدمون', adminOnly: true },
+      { id: 'backups', icon: '💾', label: 'النسخ الاحتياطية', adminOnly: true },
+    ] : []),
     { id: 'settings', icon: '⚙️', label: 'الإعدادات' },
   ];
   const lowStock = state.materials.filter(m => m.currentStock <= m.minStock).length;
@@ -979,8 +1217,8 @@ function renderSidebar() {
       <div class="sidebar-footer">
         <div class="user-info">
           <small>المستخدم</small>
-          <p>مدير المصنع</p>
-          <span class="badge blue">Admin</span>
+          <p>${esc(currentUser?.email?.split('@')[0] || 'مستخدم')}</p>
+          <span class="badge ${ROLES[currentUserRole]?.color || 'gray'}">${ROLES[currentUserRole]?.icon || ''} ${ROLES[currentUserRole]?.label || currentUserRole}</span>
         </div>
         <button class="nav-item" onclick="toggleSidebar()">
           <span class="nav-icon">${sidebarOpen ? '◀' : '▶'}</span>
@@ -1006,6 +1244,7 @@ function renderTopbar() {
   const lowStock = state.materials.filter(m => m.currentStock <= m.minStock).length;
   const userEmail = currentUser?.email || '';
   const userInitial = userEmail.charAt(0).toUpperCase() || 'م';
+  const roleData = ROLES[currentUserRole] || { label: currentUserRole, icon: '' };
   return `
     <header class="topbar">
       <div class="breadcrumb">مصنع الأعلاف › <b>${titles[page]}</b></div>
@@ -1018,7 +1257,7 @@ function renderTopbar() {
           <div class="avatar" style="width:28px;height:28px;font-size:12px;">${esc(userInitial)}</div>
           <div style="font-size:12px;">
             <div style="color:var(--text);font-weight:500;">${esc(userEmail.split('@')[0])}</div>
-            <div style="color:var(--text-dimmer);font-size:10px;">👑 Admin</div>
+            <div style="color:var(--text-dimmer);font-size:10px;">${roleData.icon} ${roleData.label}</div>
           </div>
           <button class="btn small" onclick="doLogout()" style="background:#dc2626;padding:3px 8px;" title="تسجيل الخروج">🚪</button>
         </div>
@@ -2945,29 +3184,40 @@ function renderSettings() {
     <div class="page-header">
       <div>
         <div class="page-title">الإعدادات</div>
-        <div class="page-subtitle">إدارة البيانات والنسخ الاحتياطي</div>
+        <div class="page-subtitle">إدارة البيانات والنسخ الاحتياطي والصلاحيات</div>
       </div>
     </div>
 
     <div class="grid-2">
       <div class="panel">
-        <div class="panel-header"><div class="panel-title">💾 النسخ الاحتياطي</div></div>
-        <p style="color:var(--text-dim);font-size:13px;margin-bottom:16px;">
-          البيانات محفوظة تلقائياً في متصفحك. يمكنك تصدير ملف JSON واستيراده لاحقاً.
-        </p>
+        <div class="panel-header"><div class="panel-title">☁️ بياناتك على Firebase</div></div>
+        <div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);padding:12px;border-radius:8px;margin-bottom:12px;font-size:13px;color:#6ee7b7;">
+          ✅ كل البيانات محفوظة على سيرفرات Google السحابية<br>
+          ✅ التزامن فوري بين كل الأجهزة<br>
+          ✅ نسخ احتياطية يومية تلقائية
+        </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="btn green" onclick="exportData()">📥 تصدير البيانات (JSON)</button>
-          <label class="btn">
+          <button class="btn green" onclick="exportData()">📥 تنزيل نسخة JSON</button>
+          ${isAdmin() ? `<label class="btn">
             📤 استيراد بيانات
             <input type="file" accept=".json" style="display:none;" onchange="importData(event)" />
-          </label>
-          <button class="btn red" onclick="resetData()">🔄 إعادة تعيين</button>
+          </label>` : ''}
+          ${isAdmin() ? `<button class="btn" style="background:#8b5cf6;" onclick="navigate('backups')">💾 إدارة النسخ الاحتياطية</button>` : ''}
+          ${isAdmin() ? `<button class="btn red" onclick="resetData()">🔄 إعادة تعيين</button>` : ''}
         </div>
       </div>
 
       <div class="panel">
         <div class="panel-header"><div class="panel-title">📋 معلومات النظام</div></div>
         <div style="font-size:13px;">
+          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">
+            <span style="color:var(--text-dim);">دورك في النظام</span>
+            <span class="badge ${ROLES[currentUserRole]?.color || 'gray'}">${ROLES[currentUserRole]?.icon || ''} ${ROLES[currentUserRole]?.label || currentUserRole}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">
+            <span style="color:var(--text-dim);">عدد المستخدمين</span>
+            <span class="mono">${Object.keys(allUsers).length}</span>
+          </div>
           <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">
             <span style="color:var(--text-dim);">عدد المواد الخام</span>
             <span class="mono">${state.materials.length}</span>
@@ -2986,24 +3236,42 @@ function renderSettings() {
           </div>
           <div style="display:flex;justify-content:space-between;padding:8px 0;">
             <span style="color:var(--text-dim);">الإصدار</span>
-            <span class="mono">v1.0.0</span>
+            <span class="mono">v2.0 Firebase</span>
           </div>
         </div>
       </div>
     </div>
+
+    ${isAdmin() ? `
+      <div class="panel">
+        <div class="panel-header"><div class="panel-title">🛠️ أدوات المدير</div></div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:10px;">
+          <button class="btn" onclick="navigate('users')" style="padding:14px;background:#6366f1;">
+            👥 إدارة المستخدمين والصلاحيات
+          </button>
+          <button class="btn green" onclick="navigate('backups')" style="padding:14px;">
+            💾 النسخ الاحتياطية اليومية
+          </button>
+        </div>
+      </div>
+    ` : ''}
 
     <div class="panel">
       <div class="panel-header"><div class="panel-title">📖 دليل الاستخدام</div></div>
       <div style="font-size: 13px; line-height: 1.8; color: var(--text-dim);">
         <p><b style="color:var(--text);">📊 لوحة التحكم:</b> KPIs اليومية، تنبيهات المخزون، آخر دفعات الإنتاج.</p>
         <p><b style="color:var(--text);">📦 المخزون:</b> إدارة المواد الخام. الأزرار "وارد" و"صادر" لتسجيل حركات المخزون.</p>
-        <p><b style="color:var(--text);">🧪 الوصفات:</b> تعديل نسب المكونات. التكلفة والبروتين يُحسبان تلقائياً. مجموع النسب يجب = 100%.</p>
-        <p><b style="color:var(--text);">⚙️ الإنتاج:</b> تنفيذ أمر إنتاج يخصم المواد من المخزون تلقائياً ويحسب التكلفة.</p>
-        <p><b style="color:var(--text);">🧮 حاسبة الإنتاج:</b> تحدد أقصى كمية ممكنة لكل وصفة + العنصر المحدود.</p>
-        <p><b style="color:var(--text);">📈 التقارير:</b> تحليل شامل بالوصفة، نوع الإنتاج، وقيمة المخزون.</p>
+        <p><b style="color:var(--text);">🧪 الوصفات:</b> تعديل نسب المكونات. التكلفة والبروتين يُحسبان تلقائياً.</p>
+        <p><b style="color:var(--text);">⚙️ الإنتاج:</b> أمر الإنتاج يخصم المواد من المخزون تلقائياً ويحسب التكلفة.</p>
+        <p><b style="color:var(--text);">💰 المبيعات:</b> فواتير العملاء + تتبع المدفوع والمتبقي.</p>
+        <p><b style="color:var(--text);">📈 التقارير:</b> تقارير يومية/أسبوعية/شهرية/سنوية مع فلاتر متقدمة.</p>
+        ${isAdmin() ? `
+          <p><b style="color:var(--text);">👥 المستخدمون:</b> إدارة الموظفين وصلاحياتهم.</p>
+          <p><b style="color:var(--text);">💾 النسخ الاحتياطية:</b> نسخ يومية تلقائية + استرجاع بضغطة زر.</p>
+        ` : ''}
         <hr style="margin: 12px 0; border-color: var(--border);" />
-        <p>⚡ <b>يعمل بدون إنترنت تماماً</b> — كل البيانات محفوظة في متصفحك (LocalStorage).</p>
-        <p>📱 احفظ هذه الصفحة على سطح المكتب أو الموبايل (Add to Home Screen) للوصول السريع.</p>
+        <p>☁️ <b>النظام يعمل أونلاين</b> — كل البيانات على Firebase ومتزامنة بين الأجهزة.</p>
+        <p>📱 احفظ الصفحة على سطح المكتب أو الموبايل للوصول السريع.</p>
       </div>
     </div>
   `;
@@ -3327,6 +3595,91 @@ function renderModal() {
     `;
   }
 
+  // Add User Modal
+  if (modal.type === 'addUser') {
+    return `
+      <div class="modal-overlay" onclick="if(event.target===this){modal=null;render();}">
+        <div class="modal">
+          <div class="modal-title">👥 إضافة مستخدم جديد</div>
+          <div style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);padding:10px;border-radius:8px;font-size:12px;color:#fbbf24;margin-bottom:16px;line-height:1.6;">
+            <b>⚠️ مهم:</b> قبل إضافة المستخدم هنا، يجب إنشاء حسابه أولاً في:<br>
+            Firebase Console → Authentication → Add user
+          </div>
+          <div class="form-field">
+            <label class="label">📧 البريد الإلكتروني *</label>
+            <input type="email" class="input" placeholder="user@example.com"
+              value="${esc(modal.email)}"
+              oninput="modal.email=this.value;" />
+          </div>
+          <div class="form-field">
+            <label class="label">👤 الاسم</label>
+            <input class="input" placeholder="مثال: أحمد المحاسب"
+              value="${esc(modal.name)}"
+              oninput="modal.name=this.value;" />
+          </div>
+          <div class="form-field">
+            <label class="label">🎭 الدور</label>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+              ${Object.entries(ROLES).map(([key, r]) => `
+                <button class="chip ${modal.role === key ? 'active' : ''}" style="padding:10px;justify-content:center;"
+                  onclick="modal.role='${key}'; render();">
+                  ${r.icon} ${r.label}
+                </button>
+              `).join('')}
+            </div>
+          </div>
+          ${modal.role && ROLES[modal.role] ? `
+            <div style="background:var(--bg-2);padding:10px;border-radius:8px;font-size:12px;color:var(--text-dim);">
+              <b>صلاحيات ${ROLES[modal.role].label}:</b><br>
+              ${modal.role === 'admin' ? '✅ كل الصلاحيات بدون استثناء' : ''}
+              ${modal.role === 'accountant' ? '✅ المبيعات + العملاء + التقارير المالية + التصدير' : ''}
+              ${modal.role === 'warehouse' ? '✅ المخزون + الإنتاج + حركة المخزون' : ''}
+              ${modal.role === 'operator' ? '✅ إضافة أوامر إنتاج فقط' : ''}
+              ${modal.role === 'viewer' ? '✅ قراءة فقط (لا يستطيع التعديل)' : ''}
+            </div>
+          ` : ''}
+          <div class="modal-row">
+            <button class="btn green" onclick="executeAddUser()">+ إضافة المستخدم</button>
+            <button class="btn gray" onclick="modal=null; render();">إلغاء</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Change Role Modal
+  if (modal.type === 'changeRole') {
+    return `
+      <div class="modal-overlay" onclick="if(event.target===this){modal=null;render();}">
+        <div class="modal">
+          <div class="modal-title">🎭 تغيير دور المستخدم</div>
+          <div style="background:var(--bg-2);padding:12px;border-radius:8px;margin-bottom:16px;">
+            <div style="font-weight:bold;">${esc(modal.user.name || modal.user.email.split('@')[0])}</div>
+            <div style="font-size:12px;color:var(--text-dim);">${esc(modal.user.email)}</div>
+            <div style="margin-top:6px;">
+              الدور الحالي: <span class="badge ${ROLES[modal.currentRole]?.color || 'gray'}">${ROLES[modal.currentRole]?.icon || ''} ${ROLES[modal.currentRole]?.label || modal.currentRole}</span>
+            </div>
+          </div>
+          <div class="form-field">
+            <label class="label">🎯 الدور الجديد</label>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+              ${Object.entries(ROLES).map(([key, r]) => `
+                <button class="chip ${modal.newRole === key ? 'active' : ''}" style="padding:10px;justify-content:center;"
+                  onclick="modal.newRole='${key}'; render();">
+                  ${r.icon} ${r.label}
+                </button>
+              `).join('')}
+            </div>
+          </div>
+          <div class="modal-row">
+            <button class="btn green" onclick="executeChangeRole()" ${modal.newRole === modal.currentRole ? 'disabled style="opacity:0.5;"' : ''}>💾 حفظ التغيير</button>
+            <button class="btn gray" onclick="modal=null; render();">إلغاء</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   return '';
 }
 
@@ -3387,6 +3740,323 @@ function updateProductionPreview() {
   previewEl.innerHTML = '';
 }
 
+// ============================================================
+// USERS MANAGEMENT PAGE (Admin only)
+// ============================================================
+function renderUsers() {
+  if (!isAdmin()) {
+    return `
+      <div class="page-header"><div class="page-title">⛔ غير مصرح</div></div>
+      <div class="panel">
+        <div class="empty-state">
+          <div class="empty-state-icon">🔒</div>
+          <p>هذه الصفحة متاحة لمدير النظام فقط</p>
+        </div>
+      </div>
+    `;
+  }
+
+  const usersList = Object.entries(allUsers).map(([key, u]) => ({ key, ...u }));
+  usersList.sort((a, b) => (a.role === 'admin' ? -1 : 1));
+
+  return `
+    <div class="page-header">
+      <div>
+        <div class="page-title">👥 إدارة المستخدمين والصلاحيات</div>
+        <div class="page-subtitle">${usersList.length} مستخدم مسجل في النظام</div>
+      </div>
+      <button class="btn green" onclick="openAddUserModal()">+ إضافة مستخدم جديد</button>
+    </div>
+
+    <!-- Important Notice -->
+    <div class="panel" style="background:rgba(245,158,11,0.1);border-color:rgba(245,158,11,0.3);">
+      <div style="font-size:13px;line-height:1.7;">
+        <b style="color:#fbbf24;">📌 ملاحظة مهمة:</b> إضافة المستخدمين تتم على خطوتين:
+        <br>1️⃣ <b>أضف الحساب في Firebase Console</b> (Authentication → Add user) — لإنشاء كلمة المرور
+        <br>2️⃣ <b>أضفه هنا وحدد دوره</b> — لتفعيل صلاحياته في النظام
+      </div>
+    </div>
+
+    <!-- Roles Legend -->
+    <div class="panel">
+      <div class="panel-header"><div class="panel-title">🎭 الأدوار المتاحة</div></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:10px;">
+        ${Object.entries(ROLES).map(([key, r]) => `
+          <div style="background:var(--bg-2);padding:12px;border-radius:8px;border:1px solid var(--border);">
+            <div style="font-size:14px;font-weight:bold;margin-bottom:6px;">
+              <span class="badge ${r.color}">${r.icon} ${r.label}</span>
+            </div>
+            <div style="font-size:11px;color:var(--text-dim);line-height:1.6;">
+              ${key === 'admin' ? '✅ كل الصلاحيات بدون استثناء' : ''}
+              ${key === 'accountant' ? '✅ المبيعات، العملاء، التقارير المالية' : ''}
+              ${key === 'warehouse' ? '✅ المخزون، الإنتاج، حركة المخزون' : ''}
+              ${key === 'operator' ? '✅ إضافة أوامر إنتاج فقط' : ''}
+              ${key === 'viewer' ? '✅ قراءة فقط (لا يستطيع التعديل)' : ''}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+
+    <!-- Users Table -->
+    <div class="panel">
+      <div class="panel-header"><div class="panel-title">👤 المستخدمون الحاليون</div></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>الاسم</th>
+            <th>البريد الإلكتروني</th>
+            <th>الدور</th>
+            <th>تاريخ الإضافة</th>
+            <th>أضافه</th>
+            <th>الإجراءات</th>
+          </tr></thead>
+          <tbody>
+            ${usersList.map(u => {
+              const isCurrentUser = u.email === currentUser?.email;
+              const role = ROLES[u.role] || { label: u.role, icon: '', color: 'gray' };
+              return `
+                <tr ${isCurrentUser ? 'style="background:rgba(59,130,246,0.05);"' : ''}>
+                  <td>
+                    <div style="font-weight:500;">${esc(u.name || u.email.split('@')[0])}</div>
+                    ${isCurrentUser ? '<small style="color:#60a5fa;">(أنت)</small>' : ''}
+                  </td>
+                  <td style="font-size:12px;color:var(--text-dim);">${esc(u.email)}</td>
+                  <td><span class="badge ${role.color}">${role.icon} ${role.label}</span></td>
+                  <td style="font-size:12px;color:var(--text-dim);">${u.addedAt ? new Date(u.addedAt).toLocaleDateString('ar-EG') : '—'}</td>
+                  <td style="font-size:12px;color:var(--text-dim);">${esc(u.addedBy || '—')}</td>
+                  <td style="white-space:nowrap;">
+                    <button class="btn small" onclick="openChangeRoleModal('${esc(u.key)}')" style="margin-left:3px;background:#6366f1;" title="تغيير الدور">🎭</button>
+                    ${!isCurrentUser ? `<button class="btn small" onclick="removeUserFromSystem('${esc(u.key)}')" style="background:#7f1d1d;" title="إزالة من النظام">🗑️</button>` : ''}
+                  </td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function openAddUserModal() {
+  modal = { type: 'addUser', email: '', name: '', role: 'viewer' };
+  render();
+}
+
+function executeAddUser() {
+  const email = (modal.email || '').trim().toLowerCase();
+  const name = (modal.name || '').trim();
+  if (!email || !email.includes('@')) { alert('يرجى إدخال بريد إلكتروني صحيح'); return; }
+  if (!modal.role || !ROLES[modal.role]) { alert('يرجى اختيار دور صحيح'); return; }
+
+  const key = emailToKey(email);
+  if (allUsers[key]) {
+    alert('هذا المستخدم موجود بالفعل في النظام');
+    return;
+  }
+
+  db.ref(`users/${key}`).set({
+    email,
+    name: name || email.split('@')[0],
+    role: modal.role,
+    addedAt: new Date().toISOString(),
+    addedBy: currentUser.email,
+  }).then(() => {
+    alert(`✅ تم إضافة المستخدم بنجاح\n\n⚠️ تذكير: يجب أيضاً إضافة هذا الإيميل في Firebase Console → Authentication حتى يستطيع تسجيل الدخول.`);
+    modal = null;
+    render();
+  }).catch(err => alert('فشل: ' + err.message));
+}
+
+function openChangeRoleModal(userKey) {
+  const user = allUsers[userKey];
+  if (!user) return;
+  modal = { type: 'changeRole', userKey, currentRole: user.role, newRole: user.role, user };
+  render();
+}
+
+function executeChangeRole() {
+  if (!modal.newRole || !ROLES[modal.newRole]) return;
+  const userKey = modal.userKey;
+  db.ref(`users/${userKey}/role`).set(modal.newRole).then(() => {
+    alert(`✅ تم تغيير دور ${modal.user.email} إلى: ${ROLES[modal.newRole].label}`);
+    modal = null;
+    render();
+  }).catch(err => alert('فشل: ' + err.message));
+}
+
+function removeUserFromSystem(userKey) {
+  const user = allUsers[userKey];
+  if (!user) return;
+  if (!confirm(`إزالة ${user.email} من النظام؟\n\nملاحظة: هذا يزيله من قائمة الصلاحيات فقط. حسابه في Firebase Authentication يبقى. لمنعه نهائياً، احذفه من Firebase Console أيضاً.`)) return;
+  db.ref(`users/${userKey}`).remove().then(() => {
+    alert('✅ تم إزالة المستخدم');
+    render();
+  }).catch(err => alert('فشل: ' + err.message));
+}
+
+// ============================================================
+// BACKUPS MANAGEMENT PAGE (Admin only)
+// ============================================================
+let backupsCache = [];
+let backupsLoading = false;
+
+async function loadBackupsList() {
+  backupsLoading = true;
+  backupsCache = await listBackups();
+  backupsLoading = false;
+  render();
+}
+
+function renderBackups() {
+  if (!isAdmin()) {
+    return `
+      <div class="page-header"><div class="page-title">⛔ غير مصرح</div></div>
+      <div class="panel">
+        <div class="empty-state">
+          <div class="empty-state-icon">🔒</div>
+          <p>هذه الصفحة متاحة لمدير النظام فقط</p>
+        </div>
+      </div>
+    `;
+  }
+
+  // Load backups on first render
+  if (backupsCache.length === 0 && !backupsLoading) {
+    setTimeout(loadBackupsList, 100);
+  }
+
+  const todaysBackup = backupsCache.find(b => b.key === todayKey());
+  const auto = backupsCache.filter(b => !b.manual && !b.note);
+  const manual = backupsCache.filter(b => b.manual);
+  const preRestore = backupsCache.filter(b => b.note);
+
+  return `
+    <div class="page-header">
+      <div>
+        <div class="page-title">💾 النسخ الاحتياطية</div>
+        <div class="page-subtitle">${backupsCache.length} نسخة محفوظة • يحتفظ النظام بآخر 30 يوم تلقائياً</div>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn" onclick="loadBackupsList()" title="تحديث القائمة">🔄</button>
+        <button class="btn green" onclick="manualBackup()">📸 نسخة احتياطية الآن</button>
+      </div>
+    </div>
+
+    <!-- Status -->
+    <div class="stats-grid">
+      <div class="stat-card ${todaysBackup ? 'green' : 'orange'}">
+        <div class="stat-icon">${todaysBackup ? '✅' : '⏳'}</div>
+        <div class="stat-label">نسخة اليوم</div>
+        <div class="stat-value" style="font-size:14px;">${todaysBackup ? 'تم الحفظ' : 'في الانتظار'}</div>
+        <div class="stat-sub">${todaysBackup ? new Date(todaysBackup.createdAt).toLocaleTimeString('ar-EG') : 'سيتم حفظها تلقائياً'}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">📅</div>
+        <div class="stat-label">نسخ تلقائية</div>
+        <div class="stat-value">${auto.length}</div>
+        <div class="stat-sub">يومية</div>
+      </div>
+      <div class="stat-card purple">
+        <div class="stat-icon">📸</div>
+        <div class="stat-label">نسخ يدوية</div>
+        <div class="stat-value">${manual.length}</div>
+      </div>
+      <div class="stat-card red">
+        <div class="stat-icon">🛡️</div>
+        <div class="stat-label">نسخ ما قبل الاسترجاع</div>
+        <div class="stat-value">${preRestore.length}</div>
+      </div>
+    </div>
+
+    <!-- How it works -->
+    <div class="panel" style="background:rgba(59,130,246,0.05);border-color:rgba(59,130,246,0.2);">
+      <div class="panel-header"><div class="panel-title" style="color:#60a5fa;">ℹ️ كيف يعمل النظام</div></div>
+      <div style="font-size:13px;color:var(--text-dim);line-height:1.8;">
+        🟢 <b>نسخ يومية تلقائية:</b> يحفظ النظام نسخة كاملة من البيانات أول مرة يفتحها أي مستخدم كل يوم<br>
+        🟣 <b>نسخ يدوية:</b> اضغط "نسخة احتياطية الآن" لإنشاء نسخة فورية قبل أي عملية حساسة<br>
+        🔴 <b>نسخ ما قبل الاسترجاع:</b> قبل أي عملية استرجاع، يحفظ النظام البيانات الحالية تلقائياً<br>
+        🗑️ <b>التنظيف التلقائي:</b> النسخ الأقدم من 30 يوم تُحذف تلقائياً<br>
+        🔄 <b>الاسترجاع:</b> يمكن استرجاع أي نسخة بضغطة زر (يطلب تأكيد مرتين)
+      </div>
+    </div>
+
+    <!-- Backups List -->
+    <div class="panel">
+      <div class="panel-header"><div class="panel-title">📚 كل النسخ الاحتياطية</div></div>
+
+      ${backupsLoading ? '<div class="empty-state"><div class="empty-state-icon">⏳</div>جاري التحميل...</div>' : ''}
+
+      ${!backupsLoading && backupsCache.length === 0 ? `
+        <div class="empty-state">
+          <div class="empty-state-icon">💾</div>
+          <p>لا توجد نسخ احتياطية بعد</p>
+          <button class="btn green" onclick="manualBackup()" style="margin-top:12px;">📸 إنشاء أول نسخة</button>
+        </div>
+      ` : ''}
+
+      ${!backupsLoading && backupsCache.length > 0 ? `
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>التاريخ</th>
+              <th>الوقت</th>
+              <th>النوع</th>
+              <th>أنشأها</th>
+              <th>حجم البيانات</th>
+              <th>الإجراءات</th>
+            </tr></thead>
+            <tbody>
+              ${backupsCache.map(b => {
+                const date = new Date(b.createdAt);
+                const isManual = b.manual;
+                const isPreRestore = !!b.note;
+                const type = isPreRestore ? { label: '🛡️ ما قبل استرجاع', color: 'red' }
+                            : isManual ? { label: '📸 يدوية', color: 'purple' }
+                            : { label: '🟢 تلقائية', color: 'green' };
+                const dataSize = b.data ? Object.keys(b.data).reduce((s, k) => s + (Array.isArray(b.data[k]) ? b.data[k].length : 0), 0) : 0;
+                return `
+                  <tr>
+                    <td class="mono" style="font-size:13px;">${date.toLocaleDateString('ar-EG')}</td>
+                    <td class="mono" style="font-size:12px;color:var(--text-dim);">${date.toLocaleTimeString('ar-EG')}</td>
+                    <td><span class="badge ${type.color}">${type.label}</span></td>
+                    <td style="font-size:12px;color:var(--text-dim);">${esc(b.createdBy || '—')}</td>
+                    <td class="mono" style="font-size:12px;">${dataSize} سجل</td>
+                    <td style="white-space:nowrap;">
+                      <button class="btn small green" onclick="restoreBackup('${esc(b.key)}')" title="استرجاع هذه النسخة">🔄 استرجاع</button>
+                      <button class="btn small" onclick="downloadBackup('${esc(b.key)}')" style="background:#6366f1;margin-right:3px;" title="تنزيل النسخة">📥</button>
+                      <button class="btn small" onclick="deleteBackup('${esc(b.key)}')" style="background:#7f1d1d;margin-right:3px;" title="حذف">🗑️</button>
+                    </td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+async function downloadBackup(backupKey) {
+  try {
+    const snap = await db.ref(`backups/${backupKey}`).once('value');
+    const backup = snap.val();
+    if (!backup) return;
+    const dataStr = JSON.stringify(backup, null, 2);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `backup-${backupKey}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    alert('فشل التنزيل: ' + err.message);
+  }
+}
+
 function renderPage() {
   switch (page) {
     case 'dashboard': return renderDashboard();
@@ -3397,6 +4067,8 @@ function renderPage() {
     case 'sales': return renderSales();
     case 'calculator': return renderCalculator();
     case 'reports': return renderReports();
+    case 'users': return renderUsers();
+    case 'backups': return renderBackups();
     case 'settings': return renderSettings();
     default: return renderDashboard();
   }
@@ -3405,20 +4077,18 @@ function renderPage() {
 function render() {
   const root = document.getElementById('root');
 
-  // Not logged in: show login screen
   if (!currentUser) {
     root.innerHTML = renderLogin();
     return;
   }
 
-  // Logged in but data still loading
-  if (!dataLoaded) {
+  if (!dataLoaded || !rolesLoaded) {
     root.innerHTML = `
       <div class="login-screen">
         <div class="login-box" style="text-align:center;">
           <div class="login-logo">م</div>
           <div class="login-title">جاري تحميل البيانات...</div>
-          <div class="login-sub">يرجى الانتظار، نقوم بمزامنة آخر تحديثات من الخادم</div>
+          <div class="login-sub">${!dataLoaded ? 'مزامنة البيانات' : ''}${!rolesLoaded ? ' • تحميل الصلاحيات' : ''}</div>
           <div style="margin-top:20px;">
             <div class="bar"><div class="bar-fill" style="width:60%;animation:pulse 1.5s infinite;"></div></div>
           </div>
