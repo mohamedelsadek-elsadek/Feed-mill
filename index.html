@@ -192,23 +192,24 @@ function updateSyncBadge(state){
   else if(state==='ok'){el.textContent='\u2601\ufe0f متزامن';el.style.color='#bbf7d0';}
   else if(state==='off'){el.textContent='\ud83d\udcf4 أوفلاين';el.style.color='#e8e6ff';}
 }
+let __gotCloud=false;
 function startSync(){
   function attach(){
     if(!window.__fb||!window.__fb.ready){updateSyncBadge('off');return;}
     window.__fb.subscribe((payload,ts)=>{
       try{
-        if(ts&&ts===__lastTs){ updateSyncBadge('ok'); return; }
+        if(ts&&ts===__lastTs){ updateSyncBadge('ok'); return; } // صدى الكتابة بتاعتنا
         const remote=JSON.parse(payload);
-        // دمج بدل الاستبدال: مفيش بيانات بتتحذف من أي طرف
-        const merged=mergeDB(DB,remote);
-        const changed=JSON.stringify(merged)!==JSON.stringify(DB);
-        __fbApplying=true; DB=merged; DB.__ts=Date.now(); localStorage.setItem(KEY,JSON.stringify(DB)); __fbApplying=false;
-        if(changed){ renderShell(); window.__fb.push(DB); } // ارفع النتيجة المدموجة
-        updateSyncBadge('ok');
+        // السحابة هي المصدر: نطبّق اللي فيها مباشرة (بدون دمج)
+        __fbApplying=true; DB=remote; localStorage.setItem(KEY,JSON.stringify(DB)); __fbApplying=false;
+        __gotCloud=true;
+        renderShell(); updateSyncBadge('ok');
       }catch(e){console.warn(e);}
     });
-    updateSyncBadge('ok');
-    cloudPush(); // ensure cloud has our latest if it was empty
+    // رفع لمرة واحدة: لو السحابة فاضية بعد لحظة، نرفع بياناتنا الحالية كبداية
+    setTimeout(()=>{
+      if(!__gotCloud){ DB.__ts=Date.now(); __lastTs=DB.__ts; window.__fb.push(DB); updateSyncBadge('ok'); }
+    }, 1500);
   }
   if(window.__fb&&window.__fb.ready) attach();
   else window.addEventListener('fb-ready',attach);
@@ -334,7 +335,7 @@ function downloadBackup(){
 function importBackup(){
   const inp=document.createElement('input');inp.type='file';inp.accept='.json';
   inp.onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();
-    r.onload=()=>{try{const imp=JSON.parse(r.result);DB=mergeDB(DB,imp);save();toast('تم الاستيراد والدمج بنجاح');go('dash');}catch(err){toast('ملف غير صالح','⚠️');}};
+    r.onload=()=>{try{const imp=JSON.parse(r.result);DB=imp;save();toast('تم الاستيراد بنجاح');go('dash');}catch(err){toast('ملف غير صالح','⚠️');}};
     r.readAsText(f);};
   inp.click();
 }
