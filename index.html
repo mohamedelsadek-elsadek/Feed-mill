@@ -101,6 +101,27 @@ canvas{max-width:100%}
 .seg{display:flex;gap:0;border:1.5px solid var(--line);border-radius:12px;overflow:hidden}
 .seg button{flex:1;padding:11px;background:#faf9ff;border:none;font-family:inherit;font-size:14px;font-weight:700;color:var(--sub);cursor:pointer;transition:.2s}
 .seg button.on{background:var(--grad2);color:#fff}
+
+/* ===== Print ===== */
+.print-head{text-align:center;margin-bottom:18px;border-bottom:3px solid #6366f1;padding-bottom:12px}
+.print-head h1{font-size:22px;color:#6366f1;margin:0}
+.print-head h2{font-size:17px;color:#2d2a55;margin:4px 0}
+.print-head p{font-size:14px;color:#555;font-weight:700}
+@media print{
+  @page{size:A4;margin:14mm}
+  body{background:#fff!important;padding:0!important;font-size:12pt}
+  .hero,.tabs,.bnav,.no-print,.toast,.modal{display:none!important}
+  .wrap{padding:0!important;max-width:100%!important}
+  .view{display:block!important}
+  .card{box-shadow:none!important;border:1px solid #ccc;break-inside:avoid;page-break-inside:avoid;margin-bottom:12px}
+  .kpi{box-shadow:none!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  th{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .pill{-webkit-print-color-adjust:exact;print-color-adjust:exact;border:1px solid #ddd}
+  /* لو بنطبع جزء واحد، نخفي الباقي */
+  body.printing-one .wrap > *:not(.print-target){display:none!important}
+  body.printing-one .print-target{display:block!important}
+  .print-head{display:block!important}
+}
 </style>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -134,6 +155,12 @@ const SEED = {"feeds": ["سوبر بادى", "بادى", "نامى", "ناهى",
 <script>
 /* ============ State ============ */
 const KEY='kawthar_full_v2';
+const DEVKEY='kawthar_device_name';
+function deviceName(){
+  let n=localStorage.getItem(DEVKEY);
+  if(!n){ n=prompt('اسم الجهاز ده (عشان يظهر مع المزامنة):','')||'جهاز'; localStorage.setItem(DEVKEY,n.trim()||'جهاز'); }
+  return localStorage.getItem(DEVKEY)||'جهاز';
+}
 let DB=null;
 const FORMS=['محبب','مفتت'];
 
@@ -146,6 +173,7 @@ function freshFromSeed(){
     production:[...SEED.production], dispatch:[...SEED.dispatch],
     matIncoming:[...SEED.matIncoming],
     suppliers:[...(SEED.suppliers||[])], matDispatch:[...(SEED.matDispatch||[])],
+    dailyExtra:[...(SEED.dailyExtra||[])],
     backups:[], created:new Date().toISOString()
   };
 }
@@ -183,21 +211,33 @@ let __fbTimer=null, __fbApplying=false, __lastTs=0;
 function cloudPush(){
   if(!window.__fb||!window.__fb.ready) return;
   clearTimeout(__fbTimer);
-  __fbTimer=setTimeout(()=>{ DB.__ts=Date.now(); __lastTs=DB.__ts; window.__fb.push(DB); }, 600);
+  __fbTimer=setTimeout(()=>{ stampSync(); __lastTs=DB.__ts; window.__fb.push(DB); }, 600);
+}
+function stampSync(){
+  DB.__ts=Date.now();
+  DB.__seq=(DB.__seq||0)+1;
+  DB.__by=deviceName();
 }
 function forcePushNow(){
   // كتابة فورية تكتب فوق السحابة (للاستيراد/الاسترجاع) + تجاهل أي صدى قديم
   __gotCloud=true; clearTimeout(__fbTimer);
-  if(window.__fb&&window.__fb.ready){ DB.__ts=Date.now(); __lastTs=DB.__ts; window.__fb.push(DB); }
+  if(window.__fb&&window.__fb.ready){ stampSync(); __lastTs=DB.__ts; window.__fb.push(DB); }
   localStorage.setItem(KEY,JSON.stringify(DB));
   updateSyncBadge('ok');
 }
 function save(){ DB.updated=new Date().toISOString(); localStorage.setItem(KEY,JSON.stringify(DB)); autoBackup(); if(!__fbApplying) cloudPush(); updateSyncBadge('sync'); }
 function updateSyncBadge(state){
   const el=document.getElementById('syncBadge'); if(!el)return;
-  if(state==='sync'){el.textContent='\u23f3 يزامن...';el.style.color='#f59e0b';}
+  if(state==='sync'){el.textContent='\u23f3 يزامن...';el.style.color='#fde68a';}
   else if(state==='ok'){el.textContent='\u2601\ufe0f متزامن';el.style.color='#bbf7d0';}
   else if(state==='off'){el.textContent='\ud83d\udcf4 أوفلاين';el.style.color='#e8e6ff';}
+  const info=document.getElementById('syncInfo');
+  if(info){
+    const seq=DB.__seq||0;
+    let t=''; if(DB.__ts){try{t=new Date(DB.__ts).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'});}catch(e){}}
+    const by=DB.__by?(' · '+DB.__by):'';
+    info.textContent='تحديث #'+seq+(t?(' · '+t):'')+by;
+  }
 }
 let __gotCloud=false;
 function startSync(){
@@ -216,7 +256,7 @@ function startSync(){
     });
     // رفع لمرة واحدة: لو السحابة فاضية بعد لحظة، نرفع بياناتنا الحالية كبداية
     setTimeout(()=>{
-      if(!__gotCloud){ DB.__ts=Date.now(); __lastTs=DB.__ts; window.__fb.push(DB); updateSyncBadge('ok'); }
+      if(!__gotCloud){ stampSync(); __lastTs=DB.__ts; window.__fb.push(DB); updateSyncBadge('ok'); }
     }, 1500);
   }
   if(window.__fb&&window.__fb.ready) attach();
@@ -354,17 +394,18 @@ let active='dash';
 const TABS=[['dash','📊 الرئيسية'],['prod','🏭 التصنيع'],['disp','🚚 الصرف'],['matin','📥 وارد الخامات'],
             ['matdisp','📤 صرف خامات'],
             ['feedbal','🌾 رصيد العلف'],['matbal','📦 رصيد الخامات'],['store','🏬 المخزن'],
-            ['recipe','⚗️ التركيبات'],['report','📈 التقارير'],['backups','💾 النسخ'],['settings','⚙️ الإعدادات']];
+            ['recipe','⚗️ التركيبات'],['report','📈 التقارير'],['daily','📋 تقرير المصنع اليومي'],['backups','💾 النسخ'],['settings','⚙️ الإعدادات']];
 const BNAV=[['dash','📊','الرئيسية'],['prod','🏭','تصنيع'],['disp','🚚','صرف'],['report','📈','تقارير'],['settings','⚙️','إعدادات']];
 
 function renderShell(){
   $('#app').innerHTML=`
   <div class="hero">
     <div class="hero-top">
-      <div><h1>🏭 مصنع الكوثر للأعلاف</h1><p>نظام الإدارة الشامل · <span style="font-weight:800">v20</span> · <span id="syncBadge" style="font-weight:700">☁️ متزامن</span></p></div>
+      <div><h1>🏭 مصنع الكوثر للأعلاف</h1><p>نظام الإدارة الشامل · <span style="font-weight:800">v20</span> · <span id="syncBadge" style="font-weight:700">☁️ متزامن</span><br><span id="syncInfo" style="font-size:11px;opacity:.9">تحديث #0</span></p></div>
       <div class="hero-actions">
         <button class="hbtn" onclick="downloadBackup()" title="نسخة احتياطية">💾</button>
         <button class="hbtn" onclick="exportExcel()" title="تصدير">📤</button>
+        <button class="hbtn" onclick="printCurrent()" title="طباعة">🖨️</button>
       </div>
     </div>
     <div class="tabs">${TABS.map(([k,n])=>`<button class="tab ${k===active?'active':''}" onclick="go('${k}')">${n}</button>`).join('')}</div>
@@ -375,7 +416,7 @@ function renderShell(){
 }
 function go(k){active=k;renderShell();window.scrollTo(0,0);}
 function renderView(){
-  const map={dash:vDash,prod:vProd,disp:vDisp,matin:vMatIn,matdisp:vMatDisp,feedbal:vFeedBal,matbal:vMatBal,store:vStore,recipe:vRecipe,report:vReport,backups:vBackups,settings:vSettings};
+  const map={dash:vDash,prod:vProd,disp:vDisp,matin:vMatIn,matdisp:vMatDisp,feedbal:vFeedBal,matbal:vMatBal,store:vStore,recipe:vRecipe,report:vReport,daily:vDaily,backups:vBackups,settings:vSettings};
   $('#wrap').innerHTML=(map[active]||vDash)();
   if(active==='dash')drawDash();
   if(active==='report')initReport();
@@ -746,6 +787,95 @@ function vBackups(){
     <div class="tbl-wrap"><table><thead><tr><th>التاريخ</th><th>النوع</th><th>الوقت</th><th>استرجاع</th><th>تنزيل</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
 }
 
+/* ============ Daily factory report ============ */
+let dailyDate=null, dailyZoom=100;
+function vDaily(){
+  if(!dailyDate)dailyDate=today();
+  const d=dailyDate;
+  // التصنيع في اليوم المختار
+  const prodToday=DB.production.filter(p=>p.date===d);
+  const prodRows=prodToday.length?prodToday.map(p=>`<tr><td>${p.feed}</td><td><span class="pill ${norm(p.form)==='محبب'?'m':'f'}">${norm(p.form)}</span></td><td style="font-weight:700;color:#6366f1">${fmt(p.qty)}</td><td>${p.store||''}</td></tr>`).join('')
+    :'<tr><td colspan=4 class=empty>لا يوجد تصنيع في هذا اليوم</td></tr>';
+  // الوارد في اليوم
+  const inToday=DB.matIncoming.filter(r=>r.date===d);
+  const inRows=inToday.length?inToday.map(r=>`<tr><td>${r.mat}</td><td style="font-weight:700;color:#14b8a6">${fmt(r.qty)}</td><td>${r.supplier||'—'}</td></tr>`).join('')
+    :'<tr><td colspan=3 class=empty>لا يوجد وارد في هذا اليوم</td></tr>';
+  // رصيد الخامات الإجمالي (لحد دلوقتي)
+  const mb=matBalance();
+  const matRows=DB.materials.map(m=>{const x=mb[m];const c=x.bal<=0?'#ef4444':x.bal<2000?'#f59e0b':'#22c55e';
+    return `<tr><td style="font-weight:700">${m}</td><td style="font-weight:800;color:${c}">${fmt(x.bal)}</td></tr>`;}).join('');
+  // رصيد العلف الإجمالي
+  const fb=feedBalance().filter(x=>x.open||x.prod||x.disp||x.bal);
+  const feedRows=fb.length?fb.map(x=>`<tr><td style="font-weight:700">${x.feed}</td><td><span class="pill ${x.form==='محبب'?'m':'f'}">${x.form}</span></td><td style="font-weight:800;color:#6366f1">${fmt(x.bal)}</td></tr>`).join('')
+    :'<tr><td colspan=3 class=empty>لا يوجد</td></tr>';
+  // بنود إضافية يدوية
+  const extras=(DB.dailyExtra||[]).filter(e=>!e.date||e.date===d);
+  const extraRows=extras.length?extras.map((e,i)=>{const gi=DB.dailyExtra.indexOf(e);return `<tr><td style="font-weight:700">${e.label}</td><td>${e.value||''}</td><td class="no-print"><span class="del" onclick="delDailyExtra(${gi})">✕</span></td></tr>`;}).join('')
+    :'<tr><td colspan=3 class=empty>لا توجد بنود إضافية</td></tr>';
+
+  return `<div id="dailyReport" style="zoom:${dailyZoom}%">
+  <div class="no-print" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
+    <h2 class="sec" style="margin:0;flex:1">تقرير المصنع اليومي</h2>
+    <button class="btn btn-ghost btn-sm" onclick="dailyZoom=Math.max(50,dailyZoom-10);renderView()">➖</button>
+    <span style="font-weight:700;color:#7c6fdb">${dailyZoom}%</span>
+    <button class="btn btn-ghost btn-sm" onclick="dailyZoom=Math.min(200,dailyZoom+10);renderView()">➕</button>
+    <button class="btn btn-pri btn-sm" onclick="printReport('dailyReport')">🖨️ طباعة</button>
+  </div>
+  <div class="no-print field"><label>تاريخ اليوم</label><input type="date" value="${d}" onchange="dailyDate=this.value;renderView()"></div>
+
+  <div class="print-head" style="display:none"><h1>🏭 مصنع الكوثر للأعلاف</h1><h2>تقرير المصنع اليومي</h2><p>التاريخ: ${arDate(d)}</p></div>
+
+  <div class="card"><h3><span class="d"></span>① التصنيع في اليوم (${arDate(d)})</h3>
+    <div class="tbl-wrap"><table><thead><tr><th>النوع</th><th>الشكل</th><th>الكمية (كيلو)</th><th>المخزن</th></tr></thead><tbody>${prodRows}</tbody></table></div></div>
+
+  <div class="card"><h3><span class="d"></span>② رصيد الخامات (بعد آخر تصنيع — إجمالي)</h3>
+    <div class="tbl-wrap"><table><thead><tr><th>الخامة</th><th>الرصيد (كيلو)</th></tr></thead><tbody>${matRows}</tbody></table></div></div>
+
+  <div class="card"><h3><span class="d"></span>③ رصيد العلف (بعد آخر تصنيع — إجمالي)</h3>
+    <div class="tbl-wrap"><table><thead><tr><th>النوع</th><th>الشكل</th><th>الرصيد (كيلو)</th></tr></thead><tbody>${feedRows}</tbody></table></div></div>
+
+  <div class="card"><h3><span class="d"></span>④ الوارد (خامات اليوم)</h3>
+    <div class="tbl-wrap"><table><thead><tr><th>الخامة</th><th>الكمية (كيلو)</th><th>المورد</th></tr></thead><tbody>${inRows}</tbody></table></div></div>
+
+  <div class="card"><h3><span class="d"></span>⑤ بنود إضافية</h3>
+    <div class="add-row no-print"><input id="exLabel" placeholder="اسم البند"><input id="exValue" placeholder="القيمة/ملاحظة" style="max-width:140px"><button class="btn btn-pri btn-sm" onclick="addDailyExtra()">➕</button></div>
+    <div class="tbl-wrap"><table><thead><tr><th>البند</th><th>القيمة</th><th class="no-print"></th></tr></thead><tbody>${extraRows}</tbody></table></div></div>
+  </div>`;
+}
+function addDailyExtra(){
+  const label=$('#exLabel').value.trim(); const value=$('#exValue').value.trim();
+  if(!label){toast('اكتب اسم البند','⚠️');return;}
+  if(!DB.dailyExtra)DB.dailyExtra=[];
+  DB.dailyExtra.push({label,value,date:dailyDate}); save(); toast('تمت إضافة البند'); renderView();
+}
+function delDailyExtra(i){ DB.dailyExtra.splice(i,1); save(); toast('تم الحذف','🗑️'); renderView(); }
+function printCurrent(){
+  // طباعة المحتوى الظاهر حالياً
+  const wrap=document.getElementById('wrap');
+  if(!wrap){window.print();return;}
+  // ضيف ترويسة طباعة مؤقتة بالتاريخ
+  let head=document.getElementById('globalPrintHead');
+  if(!head){head=document.createElement('div');head.id='globalPrintHead';head.className='print-head';wrap.prepend(head);}
+  head.innerHTML='<h1>🏭 مصنع الكوثر للأعلاف</h1><h2>'+(TABS.find(t=>t[0]===active)?TABS.find(t=>t[0]===active)[1].replace(/^[^ ]+ /,''):'')+'</h2><p>التاريخ: '+arDate(today())+'</p>';
+  head.style.display='block';
+  document.body.classList.add('printing-one');
+  wrap.classList.add('print-target');
+  window.print();
+  wrap.classList.remove('print-target');
+  document.body.classList.remove('printing-one');
+  head.style.display='none';
+}
+function printReport(id){
+  const el=document.getElementById(id); if(!el){window.print();return;}
+  document.body.classList.add('printing-one');
+  el.classList.add('print-target');
+  const ph=el.querySelector('.print-head'); if(ph)ph.style.display='block';
+  window.print();
+  if(ph)ph.style.display='none';
+  el.classList.remove('print-target');
+  document.body.classList.remove('printing-one');
+}
+
 /* ============ Modal ============ */
 function openModal(html){$('#modalBox').innerHTML=html;$('#modal').classList.add('show');}
 function closeModal(){$('#modal').classList.remove('show');}
@@ -787,7 +917,7 @@ function exportExcel(){
 }
 
 /* ============ Init ============ */
-load(); renderShell(); startSync(); window.addEventListener('online',()=>{updateSyncBadge('ok');cloudPush();}); window.addEventListener('offline',()=>updateSyncBadge('off'));
+load(); renderShell(); updateSyncBadge('ok'); startSync(); window.addEventListener('online',()=>{updateSyncBadge('ok');cloudPush();}); window.addEventListener('offline',()=>updateSyncBadge('off'));
 
 </script>
 </body>
