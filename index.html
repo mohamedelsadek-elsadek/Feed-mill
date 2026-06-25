@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>نظام مصنع الكوثر للأعلاف</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{
+  --grad:linear-gradient(135deg,#6366f1 0%,#7c6fdb 50%,#8b7fe8 100%);
+  --grad2:linear-gradient(135deg,#5b6fe0,#7c6fdb);
+  --indigo:#6366f1;--purple:#7c6fdb;--blue:#5b6fe0;--violet:#8b7fe8;
+  --ok:#22c55e;--warn:#f59e0b;--pink:#ec4899;--teal:#14b8a6;--danger:#ef4444;
+  --bg:#f4f3ff;--card:#fff;--ink:#2d2a55;--sub:#857fb0;--line:#e7e5ff;
+  --r:18px;
+}
+body{font-family:-apple-system,'Segoe UI',Tahoma,sans-serif;background:var(--bg);color:var(--ink);padding-bottom:90px;font-size:15px}
+.hero{background:var(--grad);color:#fff;padding:20px 18px 16px;box-shadow:0 8px 24px rgba(99,102,241,.28);position:sticky;top:0;z-index:40}
+.hero-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.hero h1{font-size:19px;font-weight:800}
+.hero p{opacity:.9;font-size:12px;margin-top:2px}
+.hero-actions{display:flex;gap:7px}
+.hbtn{width:40px;height:40px;border-radius:12px;background:rgba(255,255,255,.18);border:none;color:#fff;font-size:18px;cursor:pointer;transition:.2s;display:flex;align-items:center;justify-content:center}
+.hbtn:active{transform:scale(.9);background:rgba(255,255,255,.3)}
+.tabs{display:flex;gap:7px;overflow-x:auto;margin-top:14px;scrollbar-width:none;padding-bottom:2px}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex-shrink:0;padding:8px 15px;border-radius:12px;background:rgba(255,255,255,.16);color:#fff;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap;transition:.2s;border:none}
+.tab.active{background:#fff;color:var(--purple);box-shadow:0 4px 12px rgba(0,0,0,.12)}
+.wrap{padding:14px 16px;max-width:1000px;margin:0 auto}
+.view{display:none;animation:fade .35s}
+.view.active{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+h2.sec{font-size:20px;font-weight:800;margin:6px 4px 14px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:13px;margin-bottom:18px}
+.kpi{background:var(--grad);border-radius:20px;padding:20px 16px;color:#fff;box-shadow:0 8px 20px rgba(99,102,241,.26);position:relative;overflow:hidden;transition:.3s}
+.kpi:nth-child(2){background:linear-gradient(135deg,#7c6fdb,#9d7fe8)}
+.kpi:nth-child(3){background:linear-gradient(135deg,#5b6fe0,#6d8de8)}
+.kpi:nth-child(4){background:linear-gradient(135deg,#8b7fe8,#b07fe0)}
+.kpi:active{transform:scale(.98)}
+.kpi::after{content:'';position:absolute;top:-28px;left:-28px;width:84px;height:84px;border-radius:50%;background:rgba(255,255,255,.13)}
+.kpi .lbl{font-size:12.5px;opacity:.92;font-weight:600;margin-bottom:9px}
+.kpi .val{font-size:27px;font-weight:800;letter-spacing:-.5px}
+.kpi .u{font-size:13px;opacity:.85;font-weight:600}
+.card{background:var(--card);border-radius:var(--r);padding:18px;margin-bottom:16px;box-shadow:0 4px 16px rgba(99,102,241,.09)}
+.card h3{font-size:15.5px;font-weight:800;margin-bottom:15px;display:flex;align-items:center;gap:8px}
+.card h3 .d{width:8px;height:8px;border-radius:50%;background:var(--indigo)}
+.field{margin-bottom:13px}
+.field label{display:block;font-size:12.5px;font-weight:700;color:var(--sub);margin-bottom:6px}
+input,select{width:100%;padding:12px 13px;background:#faf9ff;border:1.5px solid var(--line);border-radius:12px;color:var(--ink);font-size:15px;font-family:inherit;outline:none;transition:.2s}
+input:focus,select:focus{border-color:var(--purple);box-shadow:0 0 0 3px rgba(124,111,219,.15)}
+select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%237c6fdb' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:left 13px center;padding-left:34px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.btn{padding:13px 18px;border-radius:12px;border:none;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer;transition:.2s;display:inline-flex;align-items:center;justify-content:center;gap:7px}
+.btn:active{transform:scale(.97)}
+.btn-pri{background:var(--grad2);color:#fff;box-shadow:0 6px 16px rgba(124,111,219,.3)}
+.btn-ghost{background:#f0eeff;color:var(--purple)}
+.btn-danger{background:#fee2e2;color:var(--danger)}
+.btn-block{width:100%}
+.btn-sm{padding:8px 13px;font-size:12.5px}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+.tbl-wrap{overflow-x:auto;border-radius:12px}
+th{background:var(--grad2);color:#fff;padding:11px 9px;font-size:12.5px;font-weight:700;text-align:right;white-space:nowrap}
+td{padding:11px 9px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+tr:nth-child(even) td{background:#faf9ff}
+.pill{display:inline-block;padding:3px 11px;border-radius:20px;font-size:11.5px;font-weight:700}
+.pill.m{background:#ede9ff;color:#6d63e0}
+.pill.f{background:#ffe9f6;color:#d6469b}
+.pill.store{background:#e0f2fe;color:#0284c7}
+.pill.direct{background:#fef3c7;color:#d97706}
+.bar{height:7px;background:var(--line);border-radius:5px;overflow:hidden}
+.bar>div{height:100%;border-radius:5px;background:var(--grad2)}
+.del{color:var(--danger);cursor:pointer;font-weight:800;font-size:15px}
+.empty{text-align:center;padding:34px 16px;color:var(--sub)}
+.empty .ic{font-size:40px;opacity:.4;margin-bottom:8px}
+.chips{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px}
+.chip{padding:8px 14px;border-radius:20px;background:#fff;border:1.5px solid var(--line);color:var(--purple);font-size:12.5px;font-weight:700;cursor:pointer;transition:.2s}
+.chip.active{background:var(--grad2);color:#fff;border-color:transparent}
+.bnav{position:fixed;bottom:0;left:0;right:0;z-index:50;background:#fff;border-top:1px solid var(--line);display:flex;padding:7px 4px;padding-bottom:max(7px,env(safe-area-inset-bottom));box-shadow:0 -4px 16px rgba(99,102,241,.08)}
+.bnav button{flex:1;background:none;border:none;color:var(--sub);font-family:inherit;font-size:10px;font-weight:700;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;padding:5px 2px;border-radius:10px;transition:.2s}
+.bnav button.active{color:var(--purple)}
+.bnav .bic{font-size:18px}
+.modal{position:fixed;inset:0;z-index:100;background:rgba(45,42,85,.5);backdrop-filter:blur(4px);display:none;align-items:flex-end;justify-content:center}
+.modal.show{display:flex}
+.modal-box{background:#fff;border-radius:22px 22px 0 0;width:100%;max-width:540px;max-height:88vh;overflow-y:auto;padding:22px;animation:up .3s}
+@media(min-width:600px){.modal{align-items:center}.modal-box{border-radius:22px}}
+@keyframes up{from{transform:translateY(40px);opacity:.6}to{transform:none;opacity:1}}
+.modal-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.modal-h h3{font-size:17px;font-weight:800}
+.toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:12px 22px;border-radius:30px;font-size:13.5px;font-weight:700;z-index:200;opacity:0;transition:.3s;pointer-events:none;display:flex;gap:8px;align-items:center;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.preview{background:#faf9ff;border:1.5px solid var(--line);border-radius:12px;padding:12px;margin-bottom:13px}
+.preview .t{font-size:12px;font-weight:700;color:var(--sub);margin-bottom:8px}
+.preview table{font-size:13px}
+.preview td{border:none;padding:4px 6px}
+.list-item{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:#faf9ff;border-radius:10px;margin-bottom:7px}
+.add-row{display:flex;gap:8px;margin-bottom:12px}
+.add-row input{flex:1}
+canvas{max-width:100%}
+.hint{font-size:11.5px;color:var(--sub);margin-top:6px;line-height:1.5}
+.seg{display:flex;gap:0;border:1.5px solid var(--line);border-radius:12px;overflow:hidden}
+.seg button{flex:1;padding:11px;background:#faf9ff;border:none;font-family:inherit;font-size:14px;font-weight:700;color:var(--sub);cursor:pointer;transition:.2s}
+.seg button.on{background:var(--grad2);color:#fff}
+</style>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+const firebaseConfig = {
+  apiKey: "AIzaSyCkT6eg-Ga8akTTGb-dAuSoFzlsHN0dBWM",
+  authDomain: "feedmill-erp.firebaseapp.com",
+  databaseURL: "https://feedmill-erp-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "feedmill-erp",
+  storageBucket: "feedmill-erp.firebasestorage.app",
+  messagingSenderId: "1054256652630",
+  appId: "1:1054256652630:web:004cf65f18ba65940f36f7"
+};
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const dataRef = ref(db, "kawthar/data");
+window.__fb = {
+  ready:true,
+  push:(obj)=>{ try{ set(dataRef, {payload:JSON.stringify(obj), ts:Date.now()}); }catch(e){console.warn(e);} },
+  subscribe:(cb)=>{ onValue(dataRef,(snap)=>{ const v=snap.val(); if(v&&v.payload) cb(v.payload, v.ts); }); }
+};
+window.dispatchEvent(new Event("fb-ready"));
+</script>
+</head><body>
+<div id="app"></div>
+<div class="toast" id="toast"></div>
+<div class="modal" id="modal"><div class="modal-box" id="modalBox"></div></div>
+<script>
+const SEED = {"feeds": ["سوبر بادى", "بادى", "نامى", "ناهى", "قليل بروتين", "عجول 14%", "عجول 16%", "عجول 19%"], "materials": ["ذره", "صويا", "زيت", "مركزات", "جيلوتين", "رده", "كسب عباد", "كسب بنجر", "قشر صويا", "رجيع كون", "مستخلص بذرة قطن", "ذره عويجه", "مونو", "اخرى 2", "اخرى 3"], "recipe": {"ذره": [550, 550, 608, 656, 850, 250, 250, 512], "صويا": [370, 400.5, 339.9, 295.15, 110, 0, 70, 310], "زيت": [20, 8, 15, 15, 0, 0, 0, 0], "مركزات": [40, 41.5, 37.1, 33.85, 40, 28, 30, 28], "جيلوتين": [20, 0, 0, 0, 0, 0, 0, 0], "رده": [0, 0, 0, 0, 0, 200, 150, 150], "كسب عباد": [0, 0, 0, 0, 0, 157, 150, 0], "كسب بنجر": [0, 0, 0, 0, 0, 150, 150, 0], "قشر صويا": [0, 0, 0, 0, 0, 215, 200, 0], "رجيع كون": [0, 0, 0, 0, 0, 0, 0, 0], "مستخلص بذرة قطن": [0, 0, 0, 0, 0, 0, 0, 0], "ذره عويجه": [0, 0, 0, 0, 0, 0, 0, 0], "مونو": [0, 14.5, 11, 7, 0, 0, 0, 0], "اخرى 2": [0, 0, 0, 0, 0, 0, 0, 0], "اخرى 3": [0, 0, 0, 0, 0, 0, 0, 0]}, "stores": ["المخزن الرئيسي", "شكائر "], "farms": ["مزرعة الكوثر", "مزرعة 5&6", "مزرعة الحاج عبد الباسط", "مزرعة اللواء وفيق", "مزرعة العجول الجبل", "مزرعة شريف اشرف", "نقدى ", "اللواء احمد جاد", "ابراهيم السراج", "هنجر ميت فضاله"], "opening": [], "matOpen": [], "production": [{"date": "2026-06-09", "feed": "ناهى", "qty": 20000, "store": "المخزن الرئيسي", "form": "محبب"}, {"date": "2026-06-09", "feed": "عجول 14%", "qty": 16000, "store": "المخزن الرئيسي", "form": "محبب"}, {"date": "2026-06-09", "feed": "عجول 16%", "qty": 6000, "store": "المخزن الرئيسي", "form": "محبب"}], "dispatch": [{"date": "2026-06-09", "farm": "مزرعة العجول الجبل", "feed": "عجول 16%", "qty": 3020.0, "type": "من المخزن", "store": "المخزن الرئيسي", "form": "محبب"}, {"date": "2026-06-09", "farm": "نقدى ", "feed": "عجول 14%", "qty": 2005.0, "type": "من المخزن", "store": "المخزن الرئيسي", "form": "محبب"}, {"date": "2026-06-09", "farm": "مزرعة الحاج عبد الباسط", "feed": "ناهى", "qty": 8190.0, "type": "من المخزن", "store": "المخزن الرئيسي", "form": "محبب"}, {"date": "2026-06-09", "farm": "مزرعة العجول الجبل", "feed": "عجول 14%", "qty": 3040.0, "type": "من المخزن", "store": "المخزن الرئيسي", "form": "محبب"}, {"date": "2026-06-09", "farm": "اللواء احمد جاد", "feed": "عجول 14%", "qty": 2000, "type": "من المخزن", "store": "المخزن الرئيسي", "form": "محبب"}, {"date": "2026-06-09", "farm": "هنجر ميت فضاله", "feed": "عجول 14%", "qty": 3000, "type": "من المخزن", "store": "المخزن الرئيسي", "form": "محبب"}, {"date": "2026-06-09", "farm": "ابراهيم السراج", "feed": "عجول 14%", "qty": 3500.0, "type": "من المخزن", "store": "المخزن الرئيسي", "form": "محبب"}], "matIncoming": [{"date": "2026-06-09", "mat": "رده", "qty": 10000}, {"date": "2026-06-09", "mat": "رده", "qty": 7990.0}]};
+</script>
+<script>
+/* ============ State ============ */
+const KEY='kawthar_full_v2';
+let DB=null;
+const FORMS=['محبب','مفتت'];
+
+function freshFromSeed(){
+  return {
+    feeds:[...SEED.feeds], materials:[...SEED.materials],
+    recipe:JSON.parse(JSON.stringify(SEED.recipe)),
+    stores:[...SEED.stores], farms:[...SEED.farms],
+    opening:[...SEED.opening], matOpen:[...SEED.matOpen],
+    production:[...SEED.production], dispatch:[...SEED.dispatch],
+    matIncoming:[...SEED.matIncoming],
+    suppliers:[...(SEED.suppliers||[])], matDispatch:[...(SEED.matDispatch||[])],
+    backups:[], created:new Date().toISOString()
+  };
+}
+function load(){
+  try{const r=localStorage.getItem(KEY);DB=r?JSON.parse(r):freshFromSeed();}
+  catch(e){DB=freshFromSeed();}
+  const f=freshFromSeed(); for(const k in f){ if(DB[k]===undefined) DB[k]=f[k]; }
+}
+const APP_VERSION='v20';
+// دمج ذكي: يوحّد السجلات من غير ما يحذف أي حاجة من الطرفين
+function recKey(r){ return JSON.stringify(r); }
+function mergeArrays(a,b){
+  const seen=new Set(), out=[];
+  (a||[]).concat(b||[]).forEach(r=>{ const k=recKey(r); if(!seen.has(k)){seen.add(k);out.push(r);} });
+  return out;
+}
+function mergeDB(local,remote){
+  // يبدأ من المحلي ويضم سجلات الريموت اللي مش موجودة
+  const merged=JSON.parse(JSON.stringify(local));
+  ['production','dispatch','matIncoming','matDispatch','opening','matOpen'].forEach(k=>{
+    merged[k]=mergeArrays(local[k],remote[k]);
+  });
+  // القوائم: اتحاد بالاسم
+  ['feeds','materials','stores','farms','suppliers'].forEach(k=>{
+    const s=new Set([...(local[k]||[]),...(remote[k]||[])]);
+    merged[k]=Array.from(s);
+  });
+  // التركيبات: لو الريموت فيه مفاتيح زيادة ضيفها
+  merged.recipe=Object.assign({},remote.recipe||{},local.recipe||{});
+  // النسخ الاحتياطية: خُد الأطول
+  merged.backups=((local.backups||[]).length>=(remote.backups||[]).length)?local.backups:remote.backups;
+  return merged;
+}
+let __fbTimer=null, __fbApplying=false, __lastTs=0;
+function cloudPush(){
+  if(!window.__fb||!window.__fb.ready) return;
+  clearTimeout(__fbTimer);
+  __fbTimer=setTimeout(()=>{ DB.__ts=Date.now(); __lastTs=DB.__ts; window.__fb.push(DB); }, 600);
+}
+function forcePushNow(){
+  // كتابة فورية تكتب فوق السحابة (للاستيراد/الاسترجاع) + تجاهل أي صدى قديم
+  __gotCloud=true; clearTimeout(__fbTimer);
+  if(window.__fb&&window.__fb.ready){ DB.__ts=Date.now(); __lastTs=DB.__ts; window.__fb.push(DB); }
+  localStorage.setItem(KEY,JSON.stringify(DB));
+  updateSyncBadge('ok');
+}
+function save(){ DB.updated=new Date().toISOString(); localStorage.setItem(KEY,JSON.stringify(DB)); autoBackup(); if(!__fbApplying) cloudPush(); updateSyncBadge('sync'); }
+function updateSyncBadge(state){
+  const el=document.getElementById('syncBadge'); if(!el)return;
+  if(state==='sync'){el.textContent='\u23f3 يزامن...';el.style.color='#f59e0b';}
+  else if(state==='ok'){el.textContent='\u2601\ufe0f متزامن';el.style.color='#bbf7d0';}
+  else if(state==='off'){el.textContent='\ud83d\udcf4 أوفلاين';el.style.color='#e8e6ff';}
+}
+let __gotCloud=false;
+function startSync(){
+  function attach(){
+    if(!window.__fb||!window.__fb.ready){updateSyncBadge('off');return;}
+    window.__fb.subscribe((payload,ts)=>{
+      try{
+        if(ts&&ts===__lastTs){ updateSyncBadge('ok'); return; } // صدى الكتابة بتاعتنا
+        if(ts&&__lastTs&&ts<__lastTs){ updateSyncBadge('ok'); return; } // نسخة أقدم من آخر كتابة لينا -> تجاهل
+        const remote=JSON.parse(payload);
+        // السحابة هي المصدر: نطبّق اللي فيها مباشرة (بدون دمج)
+        __fbApplying=true; DB=remote; localStorage.setItem(KEY,JSON.stringify(DB)); __fbApplying=false;
+        __gotCloud=true;
+        renderShell(); updateSyncBadge('ok');
+      }catch(e){console.warn(e);}
+    });
+    // رفع لمرة واحدة: لو السحابة فاضية بعد لحظة، نرفع بياناتنا الحالية كبداية
+    setTimeout(()=>{
+      if(!__gotCloud){ DB.__ts=Date.now(); __lastTs=DB.__ts; window.__fb.push(DB); updateSyncBadge('ok'); }
+    }, 1500);
+  }
+  if(window.__fb&&window.__fb.ready) attach();
+  else window.addEventListener('fb-ready',attach);
+}
+
+/* ============ Helpers ============ */
+const $=s=>document.querySelector(s);
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,5);
+const today=()=>new Date().toISOString().slice(0,10);
+const fmt=n=>{n=+n||0;return n%1===0?n.toLocaleString('en-US'):n.toLocaleString('en-US',{maximumFractionDigits:3});};
+const arDate=d=>{try{return new Date(d).toLocaleDateString('ar-EG',{day:'numeric',month:'short',year:'numeric'});}catch(e){return d;}};
+function toast(m,i='✓'){const t=$('#toast');t.innerHTML=`<span>${i}</span>${m}`;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2200);}
+const norm=f=>f==='مفتت'?'مفتت':'محبب';  // empty/anything -> محبب
+const COLORS=['#6366f1','#7c6fdb','#5b6fe0','#8b7fe8','#a07fe0','#6d8de8','#b07fe0','#9d7fe8','#ec4899','#14b8a6','#f59e0b','#22c55e'];
+
+/* ============ Calculations ============ */
+function feedIdx(f){return DB.feeds.indexOf(f);}
+function openingFor(feed,form){
+  let s=0; DB.opening.forEach(o=>{ if(o.feed===feed && norm(o.form)===form) s+=+o.qty||0; }); return s;
+}
+function feedBalance(){
+  const m={};
+  DB.feeds.forEach(f=>FORMS.forEach(fo=>m[f+'|'+fo]={feed:f,form:fo,open:openingFor(f,fo),prod:0,disp:0}));
+  DB.production.forEach(p=>{const k=p.feed+'|'+norm(p.form);if(m[k])m[k].prod+=+p.qty||0;});
+  DB.dispatch.forEach(p=>{const k=p.feed+'|'+norm(p.form);if(m[k])m[k].disp+=+p.qty||0;});
+  return Object.values(m).map(x=>({...x,bal:x.open+x.prod-x.disp}));
+}
+// raw material consumed (form-independent): sum over feeds produced * recipe/1000
+function matConsumed(){
+  const out={}; DB.materials.forEach(m=>out[m]=0);
+  DB.production.forEach(p=>{
+    const idx=feedIdx(p.feed); if(idx<0)return;
+    DB.materials.forEach(m=>{ const kg=(DB.recipe[m]&&DB.recipe[m][idx])||0; out[m]+=(+p.qty||0)*kg/1000; });
+  });
+  return out;
+}
+function matIncoming(){const o={};DB.materials.forEach(m=>o[m]=0);DB.matIncoming.forEach(r=>o[r.mat]=(o[r.mat]||0)+(+r.qty||0));return o;}
+function matOpenFor(m){let s=0;DB.matOpen.forEach(o=>{if(o.mat===m)s+=+o.qty||0;});return s;}
+function matDispatched(){
+  const o={}; DB.materials.forEach(m=>o[m]=0);
+  (DB.matDispatch||[]).forEach(r=>{ if(o[r.mat]!==undefined) o[r.mat]+=+r.qty||0; });
+  return o;
+}
+function matBalance(){
+  const cons=matConsumed(),inc=matIncoming(),sold=matDispatched(),out={};
+  DB.materials.forEach(m=>{const op=matOpenFor(m);out[m]={open:op,inc:inc[m]||0,cons:cons[m]||0,sold:sold[m]||0,bal:op+(inc[m]||0)-(cons[m]||0)-(sold[m]||0)};});
+  return out;
+}
+function storeBalance(store){
+  const m={};
+  DB.feeds.forEach(f=>FORMS.forEach(fo=>m[f+'|'+fo]={feed:f,form:fo,open:0,in:0,out:0}));
+  // رصيد أول المدة يُعتبر في المخزن الرئيسي (أول مخزن)
+  const mainStore=(DB.stores&&DB.stores[0])||'المخزن الرئيسي';
+  if(!store||store===mainStore){
+    (DB.opening||[]).forEach(o=>{const k=o.feed+'|'+norm(o.form);if(m[k])m[k].open+=+o.qty||0;});
+  }
+  DB.production.forEach(p=>{ if(!store||p.store===store){const k=p.feed+'|'+norm(p.form);if(m[k])m[k].in+=+p.qty||0;} });
+  DB.dispatch.forEach(p=>{ if(p.type==='من المخزن' && (!store||p.store===store)){const k=p.feed+'|'+norm(p.form);if(m[k])m[k].out+=+p.qty||0;} });
+  return Object.values(m).map(x=>({...x,bal:x.open+x.in-x.out}));
+}
+function farmTotals(from,to){
+  const m={};
+  DB.dispatch.forEach(d=>{
+    if(from&&d.date<from)return; if(to&&d.date>to)return;
+    if(!d.farm)return; m[d.farm]=(m[d.farm]||0)+(+d.qty||0);
+  });
+  return m;
+}
+function inRange(d,from,to){ if(from&&d<from)return false; if(to&&d>to)return false; return true; }
+
+/* ============ Backup ============ */
+function snapshotDB(){
+  return JSON.stringify({
+    feeds:DB.feeds,materials:DB.materials,recipe:DB.recipe,stores:DB.stores,farms:DB.farms,
+    suppliers:DB.suppliers,opening:DB.opening,matOpen:DB.matOpen,
+    production:DB.production,dispatch:DB.dispatch,matIncoming:DB.matIncoming,matDispatch:DB.matDispatch
+  });
+}
+function autoBackup(){
+  if(!DB.backups)DB.backups=[];
+  const t=today();
+  const last=DB.backups[DB.backups.length-1];
+  // one automatic snapshot per day
+  if(last&&last.date===t&&last.auto) return;
+  DB.backups.push({date:t,time:new Date().toISOString(),auto:true,snapshot:snapshotDB()});
+  trimBackups();
+  localStorage.setItem(KEY,JSON.stringify(DB));
+}
+function manualSnapshot(reason){
+  if(!DB.backups)DB.backups=[];
+  DB.backups.push({date:today(),time:new Date().toISOString(),auto:false,reason:reason||'يدوي',snapshot:snapshotDB()});
+  trimBackups();
+  localStorage.setItem(KEY,JSON.stringify(DB));
+}
+function trimBackups(){
+  // keep last 30 snapshots
+  if(DB.backups.length>30) DB.backups=DB.backups.slice(DB.backups.length-30);
+}
+function restoreBackup(idx){
+  const b=DB.backups[idx]; if(!b)return;
+  confirmBox('استرجاع هذه النسخة؟','هيتم استبدال البيانات الحالية ببيانات نسخة '+arDate(b.date)+'. (هنعمل نسخة من الحالي قبلها للأمان).',()=>{
+    manualSnapshot('قبل الاسترجاع');
+    const snap=JSON.parse(b.snapshot);
+    Object.keys(snap).forEach(k=>{ DB[k]=snap[k]; });
+    localStorage.setItem(KEY,JSON.stringify(DB));
+    forcePushNow();toast('تم الاسترجاع ورفعه للسحابة');go('dash');
+  });
+}
+function downloadOneBackup(idx){
+  const b=DB.backups[idx]; if(!b)return;
+  const blob=new Blob([b.snapshot],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download=`نسخة_الكوثر_${b.date}.json`;a.click();toast('تم تنزيل النسخة');
+}
+function delOneBackup(idx){
+  confirmBox('حذف هذه النسخة؟','',()=>{DB.backups.splice(idx,1);localStorage.setItem(KEY,JSON.stringify(DB));toast('تم الحذف','🗑️');renderView();});
+}
+function downloadBackup(){
+  const blob=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download=`نسخة_الكوثر_${today()}.json`;a.click();
+  toast('تم حفظ نسخة احتياطية');
+}
+function importBackup(){
+  const inp=document.createElement('input');inp.type='file';inp.accept='.json';
+  inp.onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();
+    r.onload=()=>{try{const imp=JSON.parse(r.result);DB=imp;localStorage.setItem(KEY,JSON.stringify(DB));forcePushNow();toast('تم الاستيراد ورفعه للسحابة');go('dash');}catch(err){toast('ملف غير صالح','⚠️');}};
+    r.readAsText(f);};
+  inp.click();
+}
+
+/* ============ Shell ============ */
+let active='dash';
+const TABS=[['dash','📊 الرئيسية'],['prod','🏭 التصنيع'],['disp','🚚 الصرف'],['matin','📥 وارد الخامات'],
+            ['matdisp','📤 صرف خامات'],
+            ['feedbal','🌾 رصيد العلف'],['matbal','📦 رصيد الخامات'],['store','🏬 المخزن'],
+            ['recipe','⚗️ التركيبات'],['report','📈 التقارير'],['backups','💾 النسخ'],['settings','⚙️ الإعدادات']];
+const BNAV=[['dash','📊','الرئيسية'],['prod','🏭','تصنيع'],['disp','🚚','صرف'],['report','📈','تقارير'],['settings','⚙️','إعدادات']];
+
+function renderShell(){
+  $('#app').innerHTML=`
+  <div class="hero">
+    <div class="hero-top">
+      <div><h1>🏭 مصنع الكوثر للأعلاف</h1><p>نظام الإدارة الشامل · <span style="font-weight:800">v20</span> · <span id="syncBadge" style="font-weight:700">☁️ متزامن</span></p></div>
+      <div class="hero-actions">
+        <button class="hbtn" onclick="downloadBackup()" title="نسخة احتياطية">💾</button>
+        <button class="hbtn" onclick="exportExcel()" title="تصدير">📤</button>
+      </div>
+    </div>
+    <div class="tabs">${TABS.map(([k,n])=>`<button class="tab ${k===active?'active':''}" onclick="go('${k}')">${n}</button>`).join('')}</div>
+  </div>
+  <div class="wrap" id="wrap"></div>
+  <nav class="bnav">${BNAV.map(([k,i,n])=>`<button class="${k===active?'active':''}" onclick="go('${k}')"><span class="bic">${i}</span>${n}</button>`).join('')}</nav>`;
+  renderView();
+}
+function go(k){active=k;renderShell();window.scrollTo(0,0);}
+function renderView(){
+  const map={dash:vDash,prod:vProd,disp:vDisp,matin:vMatIn,matdisp:vMatDisp,feedbal:vFeedBal,matbal:vMatBal,store:vStore,recipe:vRecipe,report:vReport,backups:vBackups,settings:vSettings};
+  $('#wrap').innerHTML=(map[active]||vDash)();
+  if(active==='dash')drawDash();
+  if(active==='report')initReport();
+  if(active==='prod')previewConsume();
+}
+
+/* ============ Dashboard ============ */
+function vDash(){
+  const fb=feedBalance();
+  const totBal=fb.reduce((s,x)=>s+x.bal,0), totProd=fb.reduce((s,x)=>s+x.prod,0), totDisp=fb.reduce((s,x)=>s+x.disp,0);
+  const farms=Object.keys(farmTotals()).filter(f=>f).length;
+  const rows=fb.filter(x=>x.open||x.prod||x.disp||x.bal).map(x=>`<tr>
+    <td style="font-weight:700">${x.feed}</td><td><span class="pill ${x.form==='محبب'?'m':'f'}">${x.form}</span></td>
+    <td style="font-weight:800;color:#6366f1">${fmt(x.bal)}</td></tr>`).join('')||'<tr><td colspan=3 class=empty>لا توجد بيانات بعد</td></tr>';
+  return `<h2 class="sec">لوحة التحكم</h2>
+  <div class="kpis">
+    <div class="kpi"><div class="lbl">رصيد العلف الكلي</div><div class="val">${fmt(totBal)} <span class="u">كيلو</span></div></div>
+    <div class="kpi"><div class="lbl">إجمالي الإنتاج</div><div class="val">${fmt(totProd)} <span class="u">كيلو</span></div></div>
+    <div class="kpi"><div class="lbl">إجمالي الصرف</div><div class="val">${fmt(totDisp)} <span class="u">كيلو</span></div></div>
+    <div class="kpi"><div class="lbl">عدد المزارع</div><div class="val">${farms}</div></div>
+  </div>
+  <div class="card"><h3><span class="d"></span>توزيع رصيد العلف</h3><canvas id="dashChart" height="170"></canvas></div>
+  <div class="card"><h3><span class="d"></span>رصيد كل نوع وشكل</h3>
+    <div class="tbl-wrap"><table><thead><tr><th>النوع</th><th>الشكل</th><th>المتبقي (كيلو)</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+}
+function drawDash(){
+  const fb=feedBalance().filter(x=>x.bal>0);
+  barChart('dashChart',fb.map(x=>x.feed.replace('عجول ','ع')+(x.form==='مفتت'?'-ف':'')),fb.map(x=>x.bal));
+}
+
+/* ============ Production ============ */
+function vProd(){
+  const recent=[...DB.production].map((p,i)=>({...p,_i:i})).reverse().slice(0,40);
+  const rows=recent.length?recent.map(p=>`<tr>
+    <td>${arDate(p.date)}</td><td style="font-weight:700">${p.feed}</td>
+    <td><span class="pill ${norm(p.form)==='محبب'?'m':'f'}">${norm(p.form)}</span></td>
+    <td style="font-weight:800;color:#6366f1">${fmt(p.qty)}</td>
+    <td><span class="del" onclick="delProd(${p._i})">✕</span></td></tr>`).join('')
+    :'<tr><td colspan=5 class=empty><div class=ic>🏭</div>لا يوجد تصنيع بعد</td></tr>';
+  return `<h2 class="sec">تسجيل التصنيع</h2>
+  <div class="card"><h3><span class="d"></span>دفعة تصنيع جديدة</h3>
+    <div class="row2">
+      <div class="field"><label>التاريخ</label><input type="date" id="pDate" value="${today()}"></div>
+      <div class="field"><label>الكمية (كيلو)</label><input type="number" inputmode="decimal" id="pQty" placeholder="0" oninput="previewConsume()"></div>
+    </div>
+    <div class="field"><label>نوع العلف</label><select id="pFeed" onchange="previewConsume()">${DB.feeds.map(f=>`<option>${f}</option>`).join('')}</select></div>
+    <div class="field"><label>الشكل</label>
+      <div class="seg"><button type="button" id="segM" class="on" onclick="setForm('محبب')">محبب</button><button type="button" id="segF" onclick="setForm('مفتت')">مفتت</button></div>
+      <input type="hidden" id="pForm" value="محبب"></div>
+    <div class="field"><label>المخزن</label><select id="pStore">${DB.stores.map(s=>`<option>${s}</option>`).join('')}</select></div>
+    <div id="consumePrev"></div>
+    <button class="btn btn-pri btn-block" onclick="addProd()">➕ تسجيل التصنيع</button>
+  </div>
+  <div class="card"><h3><span class="d"></span>آخر العمليات</h3>
+    <div class="tbl-wrap"><table><thead><tr><th>التاريخ</th><th>النوع</th><th>الشكل</th><th>الكمية</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+}
+function setForm(f){$('#pForm').value=f;$('#segM').classList.toggle('on',f==='محبب');$('#segF').classList.toggle('on',f==='مفتت');}
+function previewConsume(){
+  const el=$('#consumePrev'); if(!el)return;
+  const feed=$('#pFeed')?.value, qty=+($('#pQty')?.value)||0;
+  if(qty<=0){el.innerHTML='';return;}
+  const idx=feedIdx(feed); const items=[];
+  DB.materials.forEach(m=>{const kg=(DB.recipe[m]&&DB.recipe[m][idx])||0;if(kg>0)items.push(`<tr><td>${m}</td><td style="font-weight:700;color:#f59e0b">${fmt(qty*kg/1000)} كيلو</td></tr>`);});
+  el.innerHTML=`<div class="preview"><div class="t">📉 الخامات اللي هتُخصم:</div><table><tbody>${items.join('')||'<tr><td>—</td></tr>'}</tbody></table></div>`;
+}
+function addProd(){
+  const date=$('#pDate').value,feed=$('#pFeed').value,qty=+$('#pQty').value||0,form=$('#pForm').value,store=$('#pStore').value;
+  if(!date||qty<=0){toast('اكتب التاريخ والكمية','⚠️');return;}
+  DB.production.push({date,feed,qty,form,store}); save(); toast(`تم تصنيع ${fmt(qty)} كيلو ${feed} ${form}`); renderView();
+}
+function delProd(i){confirmBox('حذف دفعة التصنيع؟','هترجع الخامات المخصومة.',()=>{DB.production.splice(i,1);save();toast('تم الحذف','🗑️');renderView();});}
+
+/* ============ Dispatch ============ */
+function vDisp(){
+  const recent=[...DB.dispatch].map((d,i)=>({...d,_i:i})).reverse().slice(0,40);
+  const rows=recent.length?recent.map(d=>`<tr>
+    <td>${arDate(d.date)}</td><td style="font-weight:700">${d.farm||'—'}</td><td>${d.feed}</td>
+    <td><span class="pill ${norm(d.form)==='محبب'?'m':'f'}">${norm(d.form)}</span></td>
+    <td style="font-weight:800;color:#ec4899">${fmt(d.qty)}</td>
+    <td><span class="pill ${d.type==='صرف مباشر'?'direct':'store'}">${d.type}</span></td>
+    <td><span class="del" onclick="delDisp(${d._i})">✕</span></td></tr>`).join('')
+    :'<tr><td colspan=7 class=empty><div class=ic>🚚</div>لا يوجد صرف بعد</td></tr>';
+  return `<h2 class="sec">صرف العلف للمزارع</h2>
+  <div class="card"><h3><span class="d"></span>عملية صرف جديدة</h3>
+    <div class="row2">
+      <div class="field"><label>التاريخ</label><input type="date" id="dDate" value="${today()}"></div>
+      <div class="field"><label>الكمية (كيلو)</label><input type="number" inputmode="decimal" id="dQty" placeholder="0"></div>
+    </div>
+    <div class="field"><label>المزرعة / العميل</label><select id="dFarm">${DB.farms.map(f=>`<option>${f}</option>`).join('')}<option value="__new">➕ مزرعة جديدة...</option></select></div>
+    <div class="row2">
+      <div class="field"><label>نوع العلف</label><select id="dFeed">${DB.feeds.map(f=>`<option>${f}</option>`).join('')}</select></div>
+      <div class="field"><label>الشكل</label><select id="dForm"><option>محبب</option><option>مفتت</option></select></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>نوع الصرف</label><select id="dType"><option>من المخزن</option><option>صرف مباشر</option></select></div>
+      <div class="field"><label>المخزن</label><select id="dStore">${DB.stores.map(s=>`<option>${s}</option>`).join('')}</select></div>
+    </div>
+    <button class="btn btn-pri btn-block" onclick="addDisp()">➕ تسجيل الصرف</button>
+  </div>
+  <div class="card"><h3><span class="d"></span>آخر العمليات</h3>
+    <div class="tbl-wrap"><table><thead><tr><th>التاريخ</th><th>المزرعة</th><th>النوع</th><th>الشكل</th><th>الكمية</th><th>الصرف</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+}
+function addDisp(){
+  let farm=$('#dFarm').value;
+  if(farm==='__new'){ const nn=prompt('اسم المزرعة الجديدة:'); if(!nn)return; farm=nn.trim(); if(!DB.farms.includes(farm))DB.farms.push(farm); }
+  const date=$('#dDate').value,qty=+$('#dQty').value||0,feed=$('#dFeed').value,form=$('#dForm').value,type=$('#dType').value,store=$('#dStore').value;
+  if(!date||qty<=0||!farm){toast('اكمل البيانات','⚠️');return;}
+  DB.dispatch.push({date,farm,feed,qty,form,type,store}); save(); toast(`تم صرف ${fmt(qty)} كيلو لـ ${farm}`); renderView();
+}
+function delDisp(i){confirmBox('حذف عملية الصرف؟','',()=>{DB.dispatch.splice(i,1);save();toast('تم الحذف','🗑️');renderView();});}
+
+/* ============ Material incoming ============ */
+function vMatIn(){
+  const recent=[...DB.matIncoming].map((r,i)=>({...r,_i:i})).reverse().slice(0,40);
+  const rows=recent.length?recent.map(r=>`<tr><td>${arDate(r.date)}</td><td style="font-weight:700">${r.mat}</td>
+    <td style="font-weight:700;color:#7c6fdb">${r.supplier||'—'}</td>
+    <td style="font-weight:800;color:#14b8a6">${fmt(r.qty)}</td><td><span class="del" onclick="delMatIn(${r._i})">✕</span></td></tr>`).join('')
+    :'<tr><td colspan=5 class=empty><div class=ic>📥</div>لا يوجد وارد بعد</td></tr>';
+  return `<h2 class="sec">وارد الخامات</h2>
+  <div class="card"><h3><span class="d"></span>تسجيل وارد جديد</h3>
+    <div class="row2">
+      <div class="field"><label>التاريخ</label><input type="date" id="mDate" value="${today()}"></div>
+      <div class="field"><label>الخامة</label><select id="mMat">${DB.materials.map(m=>`<option>${m}</option>`).join('')}</select></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>المورد</label><select id="mSupplier">${(DB.suppliers||[]).map(s=>`<option>${s}</option>`).join('')}<option value="__new">➕ مورد جديد...</option></select></div>
+      <div class="field"><label>الكمية (كيلو)</label><input type="number" inputmode="decimal" id="mQty" placeholder="0"></div>
+    </div>
+    <button class="btn btn-pri btn-block" onclick="addMatIn()">➕ تسجيل الوارد</button>
+  </div>
+  <div class="card"><h3><span class="d"></span>آخر الوارد</h3>
+    <div class="tbl-wrap"><table><thead><tr><th>التاريخ</th><th>الخامة</th><th>المورد</th><th>الكمية</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+}
+function addMatIn(){
+  let supplier=$('#mSupplier')?$('#mSupplier').value:'';
+  if(supplier==='__new'){const nn=prompt('اسم المورد الجديد:');if(!nn)return;supplier=nn.trim();if(!DB.suppliers.includes(supplier))DB.suppliers.push(supplier);}
+  const date=$('#mDate').value,mat=$('#mMat').value,qty=+$('#mQty').value||0;
+  if(!date||qty<=0){toast('اكتب التاريخ والكمية','⚠️');return;}
+  DB.matIncoming.push({date,mat,qty,supplier});save();toast(`تم إضافة ${fmt(qty)} كيلو ${mat}`);renderView();
+}
+function delMatIn(i){confirmBox('حذف الوارد؟','',()=>{DB.matIncoming.splice(i,1);save();toast('تم الحذف','🗑️');renderView();});}
+
+/* ============ Material dispatch to customers ============ */
+function vMatDisp(){
+  const recent=[...(DB.matDispatch||[])].map((r,i)=>({...r,_i:i})).reverse().slice(0,40);
+  const rows=recent.length?recent.map(r=>`<tr><td>${arDate(r.date)}</td><td style="font-weight:700">${r.customer||'—'}</td>
+    <td>${r.mat}</td><td style="font-weight:800;color:#ec4899">${fmt(r.qty)}</td>
+    <td><span class="del" onclick="delMatDisp(${r._i})">✕</span></td></tr>`).join('')
+    :'<tr><td colspan=5 class=empty><div class=ic>📤</div>لا يوجد صرف خامات بعد</td></tr>';
+  return `<h2 class="sec">صرف الخامات للعملاء</h2>
+  <div class="card"><h3><span class="d"></span>عملية صرف خامة جديدة</h3>
+    <div class="row2">
+      <div class="field"><label>التاريخ</label><input type="date" id="xDate" value="${today()}"></div>
+      <div class="field"><label>الكمية (كيلو)</label><input type="number" inputmode="decimal" id="xQty" placeholder="0"></div>
+    </div>
+    <div class="field"><label>العميل</label><select id="xCust">${DB.farms.map(f=>`<option>${f}</option>`).join('')}<option value="__new">➕ عميل جديد...</option></select></div>
+    <div class="field"><label>الخامة</label><select id="xMat">${DB.materials.map(m=>`<option>${m}</option>`).join('')}</select></div>
+    <button class="btn btn-pri btn-block" onclick="addMatDisp()">➕ تسجيل صرف الخامة</button>
+  </div>
+  <div class="card"><h3><span class="d"></span>آخر عمليات صرف الخامات</h3>
+    <div class="tbl-wrap"><table><thead><tr><th>التاريخ</th><th>العميل</th><th>الخامة</th><th>الكمية</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+}
+function addMatDisp(){
+  let customer=$('#xCust').value;
+  if(customer==='__new'){const nn=prompt('اسم العميل الجديد:');if(!nn)return;customer=nn.trim();if(!DB.farms.includes(customer))DB.farms.push(customer);}
+  const date=$('#xDate').value,mat=$('#xMat').value,qty=+$('#xQty').value||0;
+  if(!date||qty<=0||!customer){toast('اكمل البيانات','⚠️');return;}
+  if(!DB.matDispatch)DB.matDispatch=[];
+  DB.matDispatch.push({date,customer,mat,qty});save();toast(`تم صرف ${fmt(qty)} كيلو ${mat} لـ ${customer}`);renderView();
+}
+function delMatDisp(i){confirmBox('حذف صرف الخامة؟','',()=>{DB.matDispatch.splice(i,1);save();toast('تم الحذف','🗑️');renderView();});}
+
+/* ============ Feed balance ============ */
+function vFeedBal(){
+  const fb=feedBalance();
+  const rows=fb.filter(x=>x.open||x.prod||x.disp||x.bal).map(x=>{
+    const pct=(x.open+x.prod)>0?Math.max(0,x.bal/(x.open+x.prod)*100):0;
+    return `<tr><td style="font-weight:700">${x.feed}</td>
+    <td><span class="pill ${x.form==='محبب'?'m':'f'}">${x.form}</span></td>
+    <td>${fmt(x.open)}</td><td>${fmt(x.prod)}</td><td style="color:#ec4899">${fmt(x.disp)}</td>
+    <td style="font-weight:800;color:#6366f1">${fmt(x.bal)}</td>
+    <td style="min-width:80px"><div class="bar"><div style="width:${Math.min(100,pct)}%"></div></div></td></tr>`;}).join('')
+    ||'<tr><td colspan=7 class=empty>لا توجد بيانات</td></tr>';
+  return `<h2 class="sec">رصيد العلف المُصنّع</h2>
+  <div class="card"><div class="tbl-wrap"><table><thead><tr><th>النوع</th><th>الشكل</th><th>أول المدة</th><th>مُصنّع</th><th>مصروف</th><th>المتبقي</th><th>النسبة</th></tr></thead><tbody>${rows}</tbody></table></div>
+  <button class="btn btn-ghost btn-sm btn-block" style="margin-top:12px" onclick="editOpening()">✏️ تعديل أرصدة أول المدة</button></div>`;
+}
+function editOpening(){
+  const body=`<div class="modal-h"><h3>أرصدة أول المدة (علف)</h3><button class="hbtn" style="background:#f0eeff;color:#7c6fdb" onclick="closeModal()">✕</button></div>
+    <div class="hint" style="margin-bottom:12px">الرصيد الموجود قبل بداية النظام · لا يؤثر على الخامات</div>
+    ${DB.feeds.map(f=>FORMS.map(fo=>{
+      const cur=openingFor(f,fo);
+      return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <span style="flex:1;font-weight:600;font-size:13px">${f} <span class="pill ${fo==='محبب'?'m':'f'}">${fo}</span></span>
+        <input type="number" inputmode="decimal" style="width:110px" id="op_${btoa(unescape(encodeURIComponent(f+'|'+fo))).replace(/=/g,'')}" value="${cur||''}" placeholder="0"></div>`;
+    }).join('')).join('')}
+    <button class="btn btn-pri btn-block" style="margin-top:10px" onclick="saveOpening()">💾 حفظ</button>`;
+  openModal(body);
+}
+function saveOpening(){
+  const list=[];
+  DB.feeds.forEach(f=>FORMS.forEach(fo=>{
+    const el=$('#op_'+btoa(unescape(encodeURIComponent(f+'|'+fo))).replace(/=/g,''));
+    const v=+(el?.value)||0; if(v>0)list.push({feed:f,form:fo,qty:v});
+  }));
+  DB.opening=list;save();closeModal();toast('تم حفظ أول المدة');renderView();
+}
+
+/* ============ Material balance ============ */
+function vMatBal(){
+  const mb=matBalance();
+  const rows=DB.materials.map(m=>{const x=mb[m];const c=x.bal<=0?'#ef4444':x.bal<2?'#f59e0b':'#22c55e';
+    return `<tr><td style="font-weight:700">${m}</td><td>${fmt(x.open)}</td><td style="color:#14b8a6">${fmt(x.inc)}</td>
+    <td style="color:#f59e0b">${fmt(x.cons)}</td><td style="color:#ec4899">${fmt(x.sold||0)}</td><td style="font-weight:800;color:${c}">${fmt(x.bal)}</td></tr>`;}).join('');
+  const tot=Object.values(mb).reduce((s,x)=>s+x.bal,0);
+  return `<h2 class="sec">رصيد الخامات</h2>
+  <div class="card"><div class="tbl-wrap"><table><thead><tr><th>الخامة</th><th>أول المدة</th><th>وارد</th><th>مستهلك (تصنيع)</th><th>مصروف للعملاء</th><th>المتبقي</th></tr></thead>
+    <tbody>${rows}<tr><td style="font-weight:800">الإجمالي</td><td colspan=4></td><td style="font-weight:800;color:#6366f1">${fmt(tot)}</td></tr></tbody></table></div>
+  <button class="btn btn-ghost btn-sm btn-block" style="margin-top:12px" onclick="editMatOpen()">✏️ تعديل أرصدة أول المدة</button></div>`;
+}
+function editMatOpen(){
+  const body=`<div class="modal-h"><h3>أرصدة أول المدة (خامات)</h3><button class="hbtn" style="background:#f0eeff;color:#7c6fdb" onclick="closeModal()">✕</button></div>
+    ${DB.materials.map(m=>`<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+      <span style="flex:1;font-weight:600;font-size:13px">${m}</span>
+      <input type="number" inputmode="decimal" style="width:110px" id="mo_${btoa(unescape(encodeURIComponent(m))).replace(/=/g,'')}" value="${matOpenFor(m)||''}" placeholder="0"></div>`).join('')}
+    <button class="btn btn-pri btn-block" style="margin-top:10px" onclick="saveMatOpen()">💾 حفظ</button>`;
+  openModal(body);
+}
+function saveMatOpen(){
+  const list=[];DB.materials.forEach(m=>{const el=$('#mo_'+btoa(unescape(encodeURIComponent(m))).replace(/=/g,''));const v=+(el?.value)||0;if(v>0)list.push({mat:m,qty:v});});
+  DB.matOpen=list;save();closeModal();toast('تم الحفظ');renderView();
+}
+
+/* ============ Store report ============ */
+let storeSel=null;
+function vStore(){
+  if(!storeSel)storeSel=DB.stores[0]||'';
+  const sb=storeBalance(storeSel);
+  const rows=sb.filter(x=>x.open||x.in||x.out||x.bal).map(x=>`<tr><td style="font-weight:700">${x.feed}</td>
+    <td><span class="pill ${x.form==='محبب'?'m':'f'}">${x.form}</span></td>
+    <td style="color:#7c6fdb">${fmt(x.open)}</td><td>${fmt(x.in)}</td><td style="color:#ec4899">${fmt(x.out)}</td>
+    <td style="font-weight:800;color:#6366f1">${fmt(x.bal)}</td></tr>`).join('')||'<tr><td colspan=6 class=empty>لا توجد بيانات</td></tr>';
+  const mainStore=(DB.stores&&DB.stores[0])||'المخزن الرئيسي';
+  return `<h2 class="sec">تقرير المخزن</h2>
+  <div class="card">
+    <div class="field"><label>اختر المخزن</label><select onchange="storeSel=this.value;renderView()">${DB.stores.map(s=>`<option ${s===storeSel?'selected':''}>${s}</option>`).join('')}</select></div>
+    <p class="hint" style="margin-bottom:14px">الصرف المباشر لا يدخل المخزن — يظهر هنا اللي اتخزّن واتصرف من المخزن فقط. رصيد أول المدة يُحسب في «${mainStore}».</p>
+    <div class="tbl-wrap"><table><thead><tr><th>النوع</th><th>الشكل</th><th>أول المدة</th><th>دخل</th><th>خرج</th><th>المتبقي</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+}
+
+/* ============ Recipe ============ */
+function vRecipe(){
+  const head=`<th style="position:sticky;right:0">الخامة</th>`+DB.feeds.map(f=>`<th>${f}</th>`).join('');
+  const rows=DB.materials.map(m=>`<tr><td style="position:sticky;right:0;background:#faf9ff;font-weight:700">${m}</td>
+    ${DB.feeds.map((f,i)=>`<td><input type="number" inputmode="decimal" style="width:64px;padding:6px;text-align:center" value="${(DB.recipe[m]&&DB.recipe[m][i])||0}" onchange="updRecipe('${m.replace(/'/g,"\\'")}',${i},this.value)"></td>`).join('')}</tr>`).join('');
+  const totals=DB.feeds.map((f,i)=>{let s=0;DB.materials.forEach(m=>s+=+(DB.recipe[m]&&DB.recipe[m][i])||0);return `<td style="font-weight:800;color:${Math.abs(s-1000)<1?'#22c55e':'#f59e0b'}">${fmt(s)}</td>`;}).join('');
+  return `<h2 class="sec">جدول التركيبات</h2>
+  <div class="card"><p class="hint" style="margin-bottom:12px">التركيبة بالكجم لكل 1000 كيلو علف · عدّل أي رقم وكل الأرصدة تتحدّث · المجموع المثالي 1000</p>
+  <div class="tbl-wrap"><table><thead><tr>${head}</tr></thead><tbody>${rows}<tr><td style="position:sticky;right:0;background:#5b6fe0;color:#fff;font-weight:800">الإجمالي</td>${totals}</tr></tbody></table></div></div>`;
+}
+function updRecipe(m,i,v){if(!DB.recipe[m])DB.recipe[m]=new Array(DB.feeds.length).fill(0);DB.recipe[m][i]=+v||0;save();toast('تم تحديث التركيبة');renderView();}
+
+/* ============ Reports ============ */
+let repFrom=null,repTo=null,repMode='today';
+function vReport(){
+  return `<h2 class="sec">التقارير</h2>
+  <div class="chips">${[['today','اليوم'],['yesterday','أمس'],['week','أسبوع'],['month','شهر'],['custom','فترة محددة']].map(([k,n])=>`<div class="chip ${k===repMode?'active':''}" onclick="setRepMode('${k}')">${n}</div>`).join('')}</div>
+  <div id="customRange" style="display:${repMode==='custom'?'block':'none'}"><div class="card"><div class="row2">
+    <div class="field"><label>من</label><input type="date" id="rFrom" value="${repFrom||today()}" onchange="renderReport()"></div>
+    <div class="field"><label>إلى</label><input type="date" id="rTo" value="${repTo||today()}" onchange="renderReport()"></div></div></div></div>
+  <div id="repBody"></div>`;
+}
+function setRepMode(m){repMode=m;renderView();}
+function initReport(){renderReport();}
+function repRange(){
+  const t=today();const d=new Date();const iso=x=>x.toISOString().slice(0,10);let from,to=t;
+  if(repMode==='today')from=t;
+  else if(repMode==='yesterday'){d.setDate(d.getDate()-1);from=iso(d);to=iso(d);}
+  else if(repMode==='week'){d.setDate(d.getDate()-6);from=iso(d);}
+  else if(repMode==='month'){d.setDate(d.getDate()-29);from=iso(d);}
+  else{from=$('#rFrom')?.value||t;to=$('#rTo')?.value||t;}
+  return{from,to};
+}
+function renderReport(){
+  const {from,to}=repRange();
+  const prods=DB.production.filter(p=>inRange(p.date,from,to));
+  const disps=DB.dispatch.filter(d=>inRange(d.date,from,to));
+  const totP=prods.reduce((s,p)=>s+(+p.qty||0),0), totD=disps.reduce((s,d)=>s+(+d.qty||0),0);
+  const pf={}; prods.forEach(p=>{const k=p.feed+'|'+norm(p.form);pf[k]=(pf[k]||0)+(+p.qty||0);});
+  const df={}; disps.forEach(d=>{const k=d.feed+'|'+norm(d.form);df[k]=df[k]||{tot:0,direct:0,store:0};df[k].tot+=+d.qty||0;if(d.type==='صرف مباشر')df[k].direct+=+d.qty||0;else df[k].store+=+d.qty||0;});
+  const farm={}; disps.forEach(d=>{if(d.farm)farm[d.farm]=(farm[d.farm]||0)+(+d.qty||0);});
+
+  const pRows=Object.entries(pf).filter(([k,v])=>v).map(([k,v])=>{const[f,fo]=k.split('|');return `<tr><td>${f}</td><td><span class="pill ${fo==='محبب'?'m':'f'}">${fo}</span></td><td style="font-weight:700;color:#6366f1">${fmt(v)}</td></tr>`;}).join('')||'<tr><td colspan=3 class=empty>لا يوجد</td></tr>';
+  const dRows=Object.entries(df).map(([k,v])=>{const[f,fo]=k.split('|');return `<tr><td>${f}</td><td><span class="pill ${fo==='محبب'?'m':'f'}">${fo}</span></td><td style="font-weight:700;color:#ec4899">${fmt(v.tot)}</td><td style="color:#d97706">${fmt(v.direct)}</td><td style="color:#0284c7">${fmt(v.store)}</td></tr>`;}).join('')||'<tr><td colspan=5 class=empty>لا يوجد</td></tr>';
+  const fRows=Object.entries(farm).sort((a,b)=>b[1]-a[1]).map(([n,v])=>`<tr><td style="font-weight:700">${n}</td><td style="font-weight:700;color:#7c6fdb">${fmt(v)}</td></tr>`).join('')||'<tr><td colspan=2 class=empty>لا يوجد</td></tr>';
+
+  $('#repBody').innerHTML=`
+  <div class="kpis"><div class="kpi"><div class="lbl">الإنتاج</div><div class="val">${fmt(totP)} <span class="u">كيلو</span></div></div>
+    <div class="kpi"><div class="lbl">الصرف</div><div class="val">${fmt(totD)} <span class="u">كيلو</span></div></div>
+    <div class="kpi"><div class="lbl">المزارع</div><div class="val">${Object.keys(farm).length}</div></div></div>
+  <p style="text-align:center;color:#857fb0;font-size:12px;margin-bottom:14px">من ${arDate(from)} إلى ${arDate(to)}</p>
+  <div class="card"><h3><span class="d"></span>① الإنتاج حسب النوع</h3><div class="tbl-wrap"><table><thead><tr><th>النوع</th><th>الشكل</th><th>الكمية</th></tr></thead><tbody>${pRows}</tbody></table></div></div>
+  <div class="card"><h3><span class="d"></span>② الصرف — راح فين</h3><div class="tbl-wrap"><table><thead><tr><th>النوع</th><th>الشكل</th><th>الكلي</th><th>مباشر</th><th>مخزن</th></tr></thead><tbody>${dRows}</tbody></table></div></div>
+  <div class="card"><h3><span class="d"></span>③ الصرف حسب المزرعة</h3><div class="tbl-wrap"><table><thead><tr><th>المزرعة</th><th>الكمية</th></tr></thead><tbody>${fRows}</tbody></table></div></div>`;
+}
+
+/* ============ Settings ============ */
+function vSettings(){
+  return `<h2 class="sec">الإعدادات</h2>
+  ${listCard('🌾 أنواع العلف','feeds','أضف نوع علف')}
+  ${listCard('📦 الخامات','materials','أضف خامة')}
+  ${listCard('🏬 المخازن','stores','أضف مخزن')}
+  ${listCard('👤 المزارع / العملاء','farms','أضف مزرعة')}
+  ${listCard('🏭 الموردين','suppliers','أضف مورد')}
+  <div class="card"><h3><span class="d" style="background:#ef4444"></span>البيانات والنسخ الاحتياطي</h3>
+    <div class="row2"><button class="btn btn-ghost" onclick="downloadBackup()">💾 نسخة احتياطية</button>
+    <button class="btn btn-ghost" onclick="importBackup()">📂 استرجاع</button></div>
+    <p class="hint" style="margin:10px 0">النسخ التلقائي شغّال: نسخة يومية تُحفظ داخل النظام وتتنظّف بعد 30 يوم (${DB.backups.length} نسخة محفوظة).</p>
+    <button class="btn btn-danger btn-block" onclick="resetData()">🗑️ تصفير كل البيانات (بكلمة سر)</button></div>`;
+}
+function listCard(title,key,ph){
+  const items=DB[key];
+  return `<div class="card"><h3><span class="d"></span>${title} <span style="color:#857fb0;font-weight:600">(${items.length})</span></h3>
+    <div class="add-row"><input id="add_${key}" placeholder="${ph}"><button class="btn btn-pri btn-sm" onclick="addItem('${key}')">➕</button></div>
+    ${items.map((it,i)=>`<div class="list-item"><span style="font-weight:600">${it}</span><span class="del" onclick="delItem('${key}',${i})">✕</span></div>`).join('')||'<p class="hint">لا يوجد</p>'}</div>`;
+}
+function addItem(key){
+  const el=$('#add_'+key);const v=el.value.trim();if(!v)return;
+  if(DB[key].includes(v)){toast('موجود بالفعل','⚠️');return;}
+  DB[key].push(v);
+  if(key==='feeds')DB.materials.forEach(m=>{if(DB.recipe[m])DB.recipe[m].push(0);});
+  if(key==='materials')DB.recipe[v]=new Array(DB.feeds.length).fill(0);
+  save();toast('تمت الإضافة');renderView();
+}
+function delItem(key,i){
+  const name=DB[key][i];
+  confirmBox(`حذف "${name}"؟`,'',()=>{
+    if(key==='feeds'){DB.materials.forEach(m=>{if(DB.recipe[m])DB.recipe[m].splice(i,1);});}
+    if(key==='materials')delete DB.recipe[name];
+    DB[key].splice(i,1);save();toast('تم الحذف','🗑️');renderView();
+  });
+}
+function resetData(){
+  const pw=prompt('اكتب كلمة السر لتصفير كل البيانات:');
+  if(pw===null)return;
+  if(pw!=='0000'){toast('كلمة السر غير صحيحة','⚠️');return;}
+  confirmBox('تصفير كل البيانات؟','هيتم مسح كل التصنيع والصرف والوارد وأول المدة نهائياً.',()=>{
+    manualSnapshot('قبل التصفير');
+    DB.production=[];DB.dispatch=[];DB.matIncoming=[];DB.matDispatch=[];DB.opening=[];DB.matOpen=[];
+    save();toast('تم التصفير','🗑️');go('dash');
+  });
+}
+
+/* ============ Backups view ============ */
+function vBackups(){
+  const list=[...(DB.backups||[])].map((b,i)=>({...b,_i:i})).reverse();
+  const rows=list.length?list.map(b=>`<tr>
+    <td>${arDate(b.date)}</td>
+    <td>${b.auto?'<span class="pill store">تلقائي</span>':'<span class="pill direct">'+(b.reason||'يدوي')+'</span>'}</td>
+    <td style="font-size:11px;color:#857fb0">${b.time?new Date(b.time).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}):''}</td>
+    <td><button class="btn btn-ghost btn-sm" onclick="restoreBackup(${b._i})">↩️ استرجاع</button></td>
+    <td><span class="del" onclick="downloadOneBackup(${b._i})" style="color:#14b8a6;font-size:18px">⬇️</span></td>
+    <td><span class="del" onclick="delOneBackup(${b._i})">✕</span></td></tr>`).join('')
+    :'<tr><td colspan=6 class=empty><div class=ic>💾</div>لا توجد نسخ بعد</td></tr>';
+  return `<h2 class="sec">النسخ الاحتياطية</h2>
+  <div class="card"><p class="hint" style="margin-bottom:14px">النظام بيحفظ نسخة تلقائياً كل يوم، ويحتفظ بآخر 30 نسخة. تقدر تسترجع أو تنزّل أو تحذف أي نسخة. (${(DB.backups||[]).length}/30 نسخة)</p>
+    <button class="btn btn-pri btn-block" style="margin-bottom:14px" onclick="manualSnapshot('يدوي');toast('تم حفظ نسخة');renderView();">📸 احفظ نسخة الآن</button>
+    <div class="tbl-wrap"><table><thead><tr><th>التاريخ</th><th>النوع</th><th>الوقت</th><th>استرجاع</th><th>تنزيل</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+}
+
+/* ============ Modal ============ */
+function openModal(html){$('#modalBox').innerHTML=html;$('#modal').classList.add('show');}
+function closeModal(){$('#modal').classList.remove('show');}
+document.addEventListener('click',e=>{if(e.target.id==='modal')closeModal();});
+function confirmBox(title,msg,onYes){
+  openModal(`<div class="modal-h"><h3>${title}</h3></div>${msg?`<p style="color:#857fb0;margin-bottom:18px;line-height:1.7">${msg}</p>`:''}
+    <div class="row2"><button class="btn btn-ghost" onclick="closeModal()">إلغاء</button><button class="btn btn-danger" id="cfYes">تأكيد</button></div>`);
+  $('#cfYes').onclick=()=>{closeModal();onYes();};
+}
+
+/* ============ Chart (no library) ============ */
+function barChart(id,labels,values){
+  const cv=document.getElementById(id);if(!cv||!values.length)return;
+  const ctx=cv.getContext('2d');const W=cv.width=cv.clientWidth*2;const H=cv.height*2;
+  const pad=30*2;const slot=(W-pad)/Math.max(1,values.length);const bw=slot*0.6;
+  const max=Math.max(1,...values);ctx.clearRect(0,0,W,H);ctx.textAlign='center';
+  values.forEach((v,i)=>{const x=pad/2+i*slot+slot*0.2;const h=(H-70)*(v/max);const y=H-46-h;
+    const g=ctx.createLinearGradient(0,y,0,H-46);g.addColorStop(0,COLORS[i%COLORS.length]);g.addColorStop(1,'#b07fe0');
+    ctx.fillStyle=g;if(ctx.roundRect){ctx.beginPath();ctx.roundRect(x,y,bw,h,[10,10,0,0]);ctx.fill();}else ctx.fillRect(x,y,bw,h);
+    ctx.fillStyle='#2d2a55';ctx.font='bold 22px Arial';ctx.fillText(fmt(v),x+bw/2,y-8);
+    ctx.fillStyle='#857fb0';ctx.font='19px Arial';ctx.fillText(labels[i],x+bw/2,H-16);});
+}
+
+/* ============ Excel export ============ */
+function exportExcel(){
+  const fb=feedBalance(),mb=matBalance();
+  let h='<html dir=rtl><head><meta charset=UTF-8></head><body>';
+  const T=(t,head,rows)=>{h+=`<h3>${t}</h3><table border=1 cellspacing=0 cellpadding=4><tr>${head.map(x=>`<th>${x}</th>`).join('')}</tr>${rows}</table><br>`;};
+  T('رصيد العلف',['النوع','الشكل','أول المدة','مصنّع','مصروف','المتبقي'],fb.map(x=>`<tr><td>${x.feed}</td><td>${x.form}</td><td>${x.open}</td><td>${x.prod}</td><td>${x.disp}</td><td>${x.bal}</td></tr>`).join(''));
+  T('رصيد الخامات',['الخامة','أول المدة','وارد','مستهلك تصنيع','مصروف للعملاء','المتبقي'],DB.materials.map(m=>`<tr><td>${m}</td><td>${mb[m].open}</td><td>${mb[m].inc}</td><td>${mb[m].cons}</td><td>${mb[m].sold||0}</td><td>${mb[m].bal}</td></tr>`).join(''));
+  T('التصنيع',['التاريخ','النوع','الشكل','الكمية','المخزن'],DB.production.map(p=>`<tr><td>${p.date}</td><td>${p.feed}</td><td>${norm(p.form)}</td><td>${p.qty}</td><td>${p.store}</td></tr>`).join(''));
+  T('الصرف',['التاريخ','المزرعة','النوع','الشكل','الكمية','الصرف'],DB.dispatch.map(d=>`<tr><td>${d.date}</td><td>${d.farm}</td><td>${d.feed}</td><td>${norm(d.form)}</td><td>${d.qty}</td><td>${d.type}</td></tr>`).join(''));
+  T('وارد الخامات',['التاريخ','الخامة','المورد','الكمية'],(DB.matIncoming||[]).map(r=>`<tr><td>${r.date}</td><td>${r.mat}</td><td>${r.supplier||''}</td><td>${r.qty}</td></tr>`).join(''));
+  T('صرف الخامات للعملاء',['التاريخ','العميل','الخامة','الكمية'],(DB.matDispatch||[]).map(r=>`<tr><td>${r.date}</td><td>${r.customer}</td><td>${r.mat}</td><td>${r.qty}</td></tr>`).join(''));
+  h+='</body></html>';
+  const blob=new Blob(['\ufeff'+h],{type:'application/vnd.ms-excel'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`تقرير_الكوثر_${today()}.xls`;a.click();
+  toast('تم تصدير ملف الإكسيل');
+}
+
+/* ============ Init ============ */
+load(); renderShell(); startSync(); window.addEventListener('online',()=>{updateSyncBadge('ok');cloudPush();}); window.addEventListener('offline',()=>updateSyncBadge('off'));
+
+</script>
+</body>
+</html>
