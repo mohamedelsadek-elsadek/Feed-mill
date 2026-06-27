@@ -890,6 +890,15 @@ function vDaily(){
   const inToday=DB.matIncoming.filter(r=>r.date===d);
   const inRows=inToday.length?inToday.map(r=>`<tr><td>${r.mat}</td><td style="font-weight:700;color:#14b8a6">${fmt(r.qty)}</td><td>${r.supplier||'—'}</td></tr>`).join('')
     :'<tr><td colspan=3 class=empty>لا يوجد وارد في هذا اليوم</td></tr>';
+  // العلف المنصرف في اليوم (كل نوع لمين)
+  const dispToday=DB.dispatch.filter(r=>r.date===d);
+  const dispRows=dispToday.length?dispToday.map(r=>`<tr><td style="font-weight:700">${r.farm||'—'}</td><td>${r.feed}</td><td><span class="pill ${norm(r.form)==='محبب'?'m':'f'}">${norm(r.form)}</span></td><td style="font-weight:800;color:#ec4899">${fmt(r.qty)}</td><td><span class="pill ${r.type==='صرف مباشر'?'direct':'store'}">${r.type||''}</span></td></tr>`).join('')
+    :'<tr><td colspan=5 class=empty>لا يوجد صرف علف في هذا اليوم</td></tr>';
+  // ملخص الصرف حسب النوع
+  const dispByFeed={};
+  dispToday.forEach(r=>{const k=r.feed+'|'+norm(r.form);dispByFeed[k]=(dispByFeed[k]||0)+(+r.qty||0);});
+  const dispSummary=Object.keys(dispByFeed).length?Object.entries(dispByFeed).map(([k,v])=>{const[f,fo]=k.split('|');return `<tr><td style="font-weight:700">${f}</td><td><span class="pill ${fo==='محبب'?'m':'f'}">${fo}</span></td><td style="font-weight:800;color:#ec4899">${fmt(v)}</td></tr>`;}).join('')
+    :'<tr><td colspan=3 class=empty>لا يوجد</td></tr>';
   // رصيد الخامات الإجمالي (لحد دلوقتي)
   const mb=matBalance();
   const matRows=DB.materials.map(m=>{const x=mb[m];const c=x.bal<=0?'#ef4444':x.bal<2000?'#f59e0b':'#22c55e';
@@ -927,7 +936,13 @@ function vDaily(){
   <div class="card"><h3><span class="d"></span>④ الوارد (خامات اليوم)</h3>
     <div class="tbl-wrap"><table><thead><tr><th>الخامة</th><th>الكمية (كيلو)</th><th>المورد</th></tr></thead><tbody>${inRows}</tbody></table></div></div>
 
-  <div class="card"><h3><span class="d"></span>⑤ بنود إضافية</h3>
+  <div class="card"><h3><span class="d"></span>⑤ العلف المنصرف اليوم</h3>
+    <div class="tbl-wrap"><table><thead><tr><th>المزرعة / العميل</th><th>النوع</th><th>الشكل</th><th>الكمية (كيلو)</th><th>نوع الصرف</th></tr></thead><tbody>${dispRows}</tbody></table></div></div>
+
+  <div class="card"><h3><span class="d"></span>⑥ ملخص الصرف حسب النوع</h3>
+    <div class="tbl-wrap"><table><thead><tr><th>النوع</th><th>الشكل</th><th>إجمالي المنصرف (كيلو)</th></tr></thead><tbody>${dispSummary}</tbody></table></div></div>
+
+  <div class="card"><h3><span class="d"></span>⑦ بنود إضافية</h3>
     <div class="add-row no-print"><input id="exLabel" placeholder="اسم البند"><input id="exValue" placeholder="القيمة/ملاحظة" style="max-width:140px"><button class="btn btn-pri btn-sm" onclick="addDailyExtra()">➕</button></div>
     <div class="tbl-wrap"><table><thead><tr><th>البند</th><th>القيمة</th><th class="no-print"></th></tr></thead><tbody>${extraRows}</tbody></table></div></div>
   </div>`;
