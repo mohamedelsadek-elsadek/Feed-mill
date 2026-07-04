@@ -122,6 +122,20 @@ canvas{max-width:100%}
   body.printing-one .print-target{display:block!important}
   .print-head{display:block!important}
 }
+
+/* ===== Daily report: clearer & larger ===== */
+.daily-clear .card{padding:22px;border:1.5px solid #e7e5ff;box-shadow:0 4px 20px rgba(99,102,241,.10)}
+.daily-clear .card h3{font-size:1.15em;font-weight:800;margin-bottom:16px;color:#4b45b0}
+.daily-clear table{font-size:1em}
+.daily-clear th{font-size:1em;padding:14px 12px;font-weight:800}
+.daily-clear td{padding:14px 12px;font-size:1.02em;font-weight:600}
+.daily-clear tr:nth-child(even) td{background:#f7f6ff}
+.daily-clear .pill{font-size:.85em;padding:4px 13px}
+.daily-clear .empty{font-size:1em;padding:20px}
+@media print{
+  .daily-clear{zoom:1!important}
+  .daily-clear .card{border:1px solid #bbb;box-shadow:none}
+}
 </style>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -878,7 +892,7 @@ function vBackups(){
 }
 
 /* ============ Daily factory report ============ */
-let dailyDate=null, dailyZoom=100;
+let dailyDate=null, dailyZoom=100, dailyFont=115;
 function vDaily(){
   if(!dailyDate)dailyDate=today();
   const d=dailyDate;
@@ -912,13 +926,28 @@ function vDaily(){
   const extraRows=extras.length?extras.map((e,i)=>{const gi=DB.dailyExtra.indexOf(e);return `<tr><td style="font-weight:700">${e.label}</td><td>${e.value||''}</td><td class="no-print"><span class="del" onclick="delDailyExtra(${gi})">✕</span></td></tr>`;}).join('')
     :'<tr><td colspan=3 class=empty>لا توجد بنود إضافية</td></tr>';
 
-  return `<div id="dailyReport" style="zoom:${dailyZoom}%">
-  <div class="no-print" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
-    <h2 class="sec" style="margin:0;flex:1">تقرير المصنع اليومي</h2>
-    <button class="btn btn-ghost btn-sm" onclick="dailyZoom=Math.max(50,dailyZoom-10);renderView()">➖</button>
-    <span style="font-weight:700;color:#7c6fdb">${dailyZoom}%</span>
-    <button class="btn btn-ghost btn-sm" onclick="dailyZoom=Math.min(200,dailyZoom+10);renderView()">➕</button>
-    <button class="btn btn-pri btn-sm" onclick="printReport('dailyReport')">🖨️ طباعة</button>
+  return `<div id="dailyReport" class="daily-clear" style="zoom:${dailyZoom}%;font-size:${dailyFont}%">
+  <div class="no-print" style="margin-bottom:16px">
+    <h2 class="sec" style="margin:0 0 12px">📋 تقرير المصنع اليومي</h2>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:#f4f3ff;border:1.5px solid var(--line);border-radius:14px;padding:10px 12px">
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="font-size:13px;font-weight:700;color:var(--sub)">🔤 الخط</span>
+        <button class="btn btn-ghost btn-sm" onclick="dailyFont=Math.max(80,dailyFont-10);renderView()">﹣</button>
+        <span style="font-weight:800;color:#7c6fdb;min-width:44px;text-align:center">${dailyFont}%</span>
+        <button class="btn btn-ghost btn-sm" onclick="dailyFont=Math.min(180,dailyFont+10);renderView()">＋</button>
+      </div>
+      <div style="width:1px;height:26px;background:var(--line)"></div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="font-size:13px;font-weight:700;color:var(--sub)">📄 الصفحة</span>
+        <button class="btn btn-ghost btn-sm" onclick="dailyZoom=Math.max(50,dailyZoom-10);renderView()">﹣</button>
+        <span style="font-weight:800;color:#7c6fdb;min-width:44px;text-align:center">${dailyZoom}%</span>
+        <button class="btn btn-ghost btn-sm" onclick="dailyZoom=Math.min(200,dailyZoom+10);renderView()">＋</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn btn-pri" style="flex:1" onclick="printReport('dailyReport')">🖨️ طباعة</button>
+      <button class="btn btn-ghost" style="flex:1" onclick="exportDailyPDF()">📄 حفظ PDF</button>
+    </div>
   </div>
   <div class="no-print field"><label>تاريخ اليوم</label><input type="date" value="${d}" onchange="dailyDate=this.value;renderView()"></div>
 
@@ -969,6 +998,27 @@ function printCurrent(){
   wrap.classList.remove('print-target');
   document.body.classList.remove('printing-one');
   head.style.display='none';
+}
+function exportDailyPDF(){
+  const el=document.getElementById('dailyReport'); if(!el){toast('غير متاح','⚠️');return;}
+  if(typeof html2pdf==='undefined'){ toast('جاري التحميل... جرّب تاني بعد ثانية','⏳'); loadHtml2pdf(); return; }
+  const ph=el.querySelector('.print-head'); if(ph)ph.style.display='block';
+  const prevZoom=el.style.zoom; el.style.zoom='1';
+  const opt={margin:8,filename:'تقرير_المصنع_'+(dailyDate||today())+'.pdf',
+    image:{type:'jpeg',quality:0.98},
+    html2canvas:{scale:2,useCORS:true,backgroundColor:'#ffffff'},
+    jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},
+    pagebreak:{mode:['css','legacy']}};
+  toast('جاري إنشاء PDF...','📄');
+  html2pdf().set(opt).from(el).save().then(()=>{
+    if(ph)ph.style.display='none'; el.style.zoom=prevZoom; toast('تم حفظ PDF');
+  }).catch(e=>{ if(ph)ph.style.display='none'; el.style.zoom=prevZoom; console.warn(e); toast('تعذّر إنشاء PDF','⚠️'); });
+}
+function loadHtml2pdf(){
+  if(typeof html2pdf!=='undefined'||document.getElementById('h2pdf'))return;
+  const s=document.createElement('script'); s.id='h2pdf';
+  s.src='https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+  document.head.appendChild(s);
 }
 function printReport(id){
   const el=document.getElementById(id); if(!el){window.print();return;}
@@ -1091,7 +1141,7 @@ function exportExcel(){
 }
 
 /* ============ Init ============ */
-load(); renderApp(); updateSyncBadge('ok'); startSync(); window.addEventListener('online',()=>{updateSyncBadge('ok');cloudPush();}); window.addEventListener('offline',()=>updateSyncBadge('off'));
+load(); renderApp(); updateSyncBadge('ok'); startSync(); loadHtml2pdf(); window.addEventListener('online',()=>{updateSyncBadge('ok');cloudPush();}); window.addEventListener('offline',()=>updateSyncBadge('off'));
 
 </script>
 </body>
