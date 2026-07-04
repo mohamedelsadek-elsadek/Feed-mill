@@ -123,18 +123,25 @@ canvas{max-width:100%}
   .print-head{display:block!important}
 }
 
-/* ===== Daily report: clearer & larger ===== */
-.daily-clear .card{padding:22px;border:1.5px solid #e7e5ff;box-shadow:0 4px 20px rgba(99,102,241,.10)}
-.daily-clear .card h3{font-size:1.15em;font-weight:800;margin-bottom:16px;color:#4b45b0}
-.daily-clear table{font-size:1em}
-.daily-clear th{font-size:1em;padding:14px 12px;font-weight:800}
-.daily-clear td{padding:14px 12px;font-size:1.02em;font-weight:600}
-.daily-clear tr:nth-child(even) td{background:#f7f6ff}
-.daily-clear .pill{font-size:.85em;padding:4px 13px}
-.daily-clear .empty{font-size:1em;padding:20px}
+/* ===== Daily report: bold & very clear (like reference tables) ===== */
+.daily-clear{color:#1a1a2e}
+.daily-clear .card{padding:20px;border:2px solid #cdd6e8;border-radius:14px;box-shadow:0 4px 20px rgba(99,102,241,.10)}
+.daily-clear .card h3{font-size:1.3em;font-weight:900;margin-bottom:16px;color:#1d4ed8;border-bottom:3px solid #dbe3f4;padding-bottom:10px}
+.daily-clear table{font-size:1em;border-collapse:collapse;border:2px solid #6c8fc7}
+.daily-clear th{font-size:1.05em;padding:15px 12px;font-weight:900;background:#6c9bd1;color:#0c2a4d;border:1.5px solid #4f7bb0;text-align:center}
+.daily-clear td{padding:15px 12px;font-size:1.12em;font-weight:800;color:#111;border:1.5px solid #b9c7dd;text-align:center}
+.daily-clear td:first-child{background:#eef2fb;font-weight:900;color:#0c2a4d}
+.daily-clear tr:nth-child(even) td{background:#f4f7fc}
+.daily-clear tr:nth-child(even) td:first-child{background:#e7edf8}
+.daily-clear .pill{font-size:.9em;padding:5px 15px;font-weight:900}
+.daily-clear .empty{font-size:1.05em;padding:22px;font-weight:700}
+/* أرقام حمرا غامقة زي المرجع */
+.daily-clear td[data-num]{color:#c00;font-weight:900}
 @media print{
   .daily-clear{zoom:1!important}
-  .daily-clear .card{border:1px solid #bbb;box-shadow:none}
+  .daily-clear .card{border:2px solid #6c8fc7;box-shadow:none;break-inside:avoid}
+  .daily-clear th{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .daily-clear td:first-child{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
 </style>
 <script type="module">
@@ -892,7 +899,11 @@ function vBackups(){
 }
 
 /* ============ Daily factory report ============ */
-let dailyDate=null, dailyZoom=100, dailyFont=115;
+let dailyDate=null, dailySize='وسط';
+const DAILY_SIZES={'صغير':{font:100,zoom:90},'وسط':{font:125,zoom:100},'كبير':{font:150,zoom:115}};
+function dFont(){return (DAILY_SIZES[dailySize]||DAILY_SIZES['وسط']).font;}
+function dZoom(){return (DAILY_SIZES[dailySize]||DAILY_SIZES['وسط']).zoom;}
+function setDailySize(s){dailySize=s;renderView();}
 function vDaily(){
   if(!dailyDate)dailyDate=today();
   const d=dailyDate;
@@ -926,27 +937,21 @@ function vDaily(){
   const extraRows=extras.length?extras.map((e,i)=>{const gi=DB.dailyExtra.indexOf(e);return `<tr><td style="font-weight:700">${e.label}</td><td>${e.value||''}</td><td class="no-print"><span class="del" onclick="delDailyExtra(${gi})">✕</span></td></tr>`;}).join('')
     :'<tr><td colspan=3 class=empty>لا توجد بنود إضافية</td></tr>';
 
-  return `<div id="dailyReport" class="daily-clear" style="zoom:${dailyZoom}%;font-size:${dailyFont}%">
+  return `<div id="dailyReport" class="daily-clear" style="zoom:${dZoom()}%;font-size:${dFont()}%">
   <div class="no-print" style="margin-bottom:16px">
     <h2 class="sec" style="margin:0 0 12px">📋 تقرير المصنع اليومي</h2>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:#f4f3ff;border:1.5px solid var(--line);border-radius:14px;padding:10px 12px">
-      <div style="display:flex;align-items:center;gap:6px">
-        <span style="font-size:13px;font-weight:700;color:var(--sub)">🔤 الخط</span>
-        <button class="btn btn-ghost btn-sm" onclick="dailyFont=Math.max(80,dailyFont-10);renderView()">﹣</button>
-        <span style="font-weight:800;color:#7c6fdb;min-width:44px;text-align:center">${dailyFont}%</span>
-        <button class="btn btn-ghost btn-sm" onclick="dailyFont=Math.min(180,dailyFont+10);renderView()">＋</button>
+    <div style="background:#f4f3ff;border:1.5px solid var(--line);border-radius:14px;padding:12px">
+      <div style="font-size:13px;font-weight:800;color:var(--sub);margin-bottom:8px">📏 حجم التقرير</div>
+      <div class="seg" style="margin-bottom:10px">
+        <button type="button" class="${dailySize==='صغير'?'on':''}" onclick="setDailySize('صغير')">صغير</button>
+        <button type="button" class="${dailySize==='وسط'?'on':''}" onclick="setDailySize('وسط')">وسط</button>
+        <button type="button" class="${dailySize==='كبير'?'on':''}" onclick="setDailySize('كبير')">كبير</button>
       </div>
-      <div style="width:1px;height:26px;background:var(--line)"></div>
-      <div style="display:flex;align-items:center;gap:6px">
-        <span style="font-size:13px;font-weight:700;color:var(--sub)">📄 الصفحة</span>
-        <button class="btn btn-ghost btn-sm" onclick="dailyZoom=Math.max(50,dailyZoom-10);renderView()">﹣</button>
-        <span style="font-weight:800;color:#7c6fdb;min-width:44px;text-align:center">${dailyZoom}%</span>
-        <button class="btn btn-ghost btn-sm" onclick="dailyZoom=Math.min(200,dailyZoom+10);renderView()">＋</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-pri" style="flex:1" onclick="printReport('dailyReport')">🖨️ طباعة</button>
+        <button class="btn btn-ghost" style="flex:1" onclick="exportDailyPDF()">📄 PDF</button>
+        <button class="btn" style="flex:1;background:#25d366;color:#fff" onclick="shareDailyPDF()">📱 إرسال PDF</button>
       </div>
-    </div>
-    <div style="display:flex;gap:8px;margin-top:10px">
-      <button class="btn btn-pri" style="flex:1" onclick="printReport('dailyReport')">🖨️ طباعة</button>
-      <button class="btn btn-ghost" style="flex:1" onclick="exportDailyPDF()">📄 حفظ PDF</button>
     </div>
   </div>
   <div class="no-print field"><label>تاريخ اليوم</label><input type="date" value="${d}" onchange="dailyDate=this.value;renderView()"></div>
@@ -1013,6 +1018,53 @@ function exportDailyPDF(){
   html2pdf().set(opt).from(el).save().then(()=>{
     if(ph)ph.style.display='none'; el.style.zoom=prevZoom; toast('تم حفظ PDF');
   }).catch(e=>{ if(ph)ph.style.display='none'; el.style.zoom=prevZoom; console.warn(e); toast('تعذّر إنشاء PDF','⚠️'); });
+}
+async function shareDailyPDF(){
+  const el=document.getElementById('dailyReport'); if(!el){toast('غير متاح','⚠️');return;}
+  if(typeof html2pdf==='undefined'){ toast('جاري تحميل الأدوات... جرّب تاني','⏳'); loadHtml2pdf(); return; }
+  const ph=el.querySelector('.print-head'); if(ph)ph.style.display='block';
+  const prevZoom=el.style.zoom; el.style.zoom='1';
+  const fname='تقرير_المصنع_'+(dailyDate||today())+'.pdf';
+  const opt={margin:8,filename:fname,image:{type:'jpeg',quality:0.98},
+    html2canvas:{scale:2,useCORS:true,backgroundColor:'#ffffff'},
+    jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},pagebreak:{mode:['css','legacy']}};
+  toast('جاري إنشاء PDF...','📄');
+  try{
+    const blob=await html2pdf().set(opt).from(el).outputPdf('blob');
+    if(ph)ph.style.display='none'; el.style.zoom=prevZoom;
+    const file=new File([blob],fname,{type:'application/pdf'});
+    // جرّب مشاركة الملف نفسه (واتساب/تليجرام/إيميل...)
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      await navigator.share({files:[file],title:'تقرير المصنع اليومي',text:'تقرير مصنع الكوثر - '+(dailyDate||today())});
+      toast('تم فتح المشاركة');
+    } else {
+      // fallback: نزّل الملف + افتح واتساب برسالة
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a'); a.href=url; a.download=fname; a.click();
+      toast('تم تنزيل الـ PDF — ارفقه في المحادثة','📎');
+      setTimeout(()=>window.open('https://wa.me/?text=تقرير مصنع الكوثر - '+(dailyDate||today()),'_blank'),800);
+    }
+  }catch(e){
+    if(ph)ph.style.display='none'; el.style.zoom=prevZoom; console.warn(e);
+    toast('تعذّر إنشاء PDF','⚠️');
+  }
+}
+function shareDailyWhatsapp(){
+  const d=dailyDate||today();
+  const prodToday=DB.production.filter(p=>p.date===d);
+  const dispToday=DB.dispatch.filter(r=>r.date===d);
+  const inToday=DB.matIncoming.filter(r=>r.date===d);
+  let msg='🏭 *مصنع الكوثر للأعلاف*%0aتقرير يوم '+d+'%0a%0a';
+  msg+='🏭 *التصنيع:*%0a';
+  if(prodToday.length) prodToday.forEach(p=>{msg+='• '+p.feed+' ('+norm(p.form)+'): '+fmt(p.qty)+' كيلو%0a';});
+  else msg+='لا يوجد%0a';
+  msg+='%0a🚚 *الصرف:*%0a';
+  if(dispToday.length) dispToday.forEach(r=>{msg+='• '+(r.farm||'')+' — '+r.feed+': '+fmt(r.qty)+' كيلو%0a';});
+  else msg+='لا يوجد%0a';
+  msg+='%0a📥 *الوارد:*%0a';
+  if(inToday.length) inToday.forEach(r=>{msg+='• '+r.mat+': '+fmt(r.qty)+' كيلو'+(r.supplier?(' ('+r.supplier+')'):'')+'%0a';});
+  else msg+='لا يوجد%0a';
+  window.open('https://wa.me/?text='+msg,'_blank');
 }
 function loadHtml2pdf(){
   if(typeof html2pdf!=='undefined'||document.getElementById('h2pdf'))return;
