@@ -139,7 +139,9 @@ canvas{max-width:100%}
 .daily-clear td[data-num]{color:#c00;font-weight:900}
 @media print{
   .daily-clear{zoom:1!important}
-  .daily-clear .card{border:2px solid #6c8fc7;box-shadow:none;break-inside:avoid}
+  .daily-clear .card{border:2px solid #6c8fc7;box-shadow:none;break-inside:avoid;page-break-inside:avoid;-webkit-column-break-inside:avoid}
+  .daily-clear tr{break-inside:avoid;page-break-inside:avoid}
+  .daily-clear thead{display:table-header-group}
   .daily-clear th{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .daily-clear td:first-child{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
@@ -1013,7 +1015,7 @@ function exportDailyPDF(){
     image:{type:'jpeg',quality:0.98},
     html2canvas:{scale:2,useCORS:true,backgroundColor:'#ffffff'},
     jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},
-    pagebreak:{mode:['css','legacy']}};
+    pagebreak:{mode:['css','legacy'],avoid:['.card','tr']}};
   toast('جاري إنشاء PDF...','📄');
   html2pdf().set(opt).from(el).save().then(()=>{
     if(ph)ph.style.display='none'; el.style.zoom=prevZoom; toast('تم حفظ PDF');
@@ -1027,7 +1029,7 @@ async function shareDailyPDF(){
   const fname='تقرير_المصنع_'+(dailyDate||today())+'.pdf';
   const opt={margin:8,filename:fname,image:{type:'jpeg',quality:0.98},
     html2canvas:{scale:2,useCORS:true,backgroundColor:'#ffffff'},
-    jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},pagebreak:{mode:['css','legacy']}};
+    jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},pagebreak:{mode:['css','legacy'],avoid:['.card','tr']}};
   toast('جاري إنشاء PDF...','📄');
   try{
     const blob=await html2pdf().set(opt).from(el).outputPdf('blob');
