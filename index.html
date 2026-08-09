@@ -148,7 +148,7 @@ canvas{max-width:100%}
 </style>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 const firebaseConfig = {
   apiKey: "AIzaSyCkT6eg-Ga8akTTGb-dAuSoFzlsHN0dBWM",
   authDomain: "feedmill-erp.firebaseapp.com",
@@ -164,7 +164,8 @@ const dataRef = ref(db, "kawthar/data");
 window.__fb = {
   ready:true,
   push:(obj)=>{ return set(dataRef, {payload:JSON.stringify(obj), ts:Date.now()}); },
-  subscribe:(cb)=>{ onValue(dataRef,(snap)=>{ const v=snap.val(); if(v&&v.payload) cb(v.payload, v.ts); }); }
+  subscribe:(cb)=>{ onValue(dataRef,(snap)=>{ const v=snap.val(); if(v&&v.payload) cb(v.payload, v.ts); }); },
+  getOnce:()=>get(dataRef).then(snap=>snap.val())
 };
 window.dispatchEvent(new Event("fb-ready"));
 </script>
@@ -206,7 +207,7 @@ function load(){
   catch(e){DB=freshFromSeed();}
   const f=freshFromSeed(); for(const k in f){ if(DB[k]===undefined) DB[k]=f[k]; }
 }
-const APP_VERSION='v21 — تزامن بالختم الزمني';
+const APP_VERSION='v22 — إصلاح سباق الاتصال';
 // دمج ذكي: يوحّد السجلات من غير ما يحذف أي حاجة من الطرفين
 function recKey(r){ return JSON.stringify(r); }
 function mergeArrays(a,b){
@@ -316,9 +317,23 @@ function startSync(){
         updateSyncBadge('ok');
       }catch(e){console.warn(e);}
     });
-    setTimeout(()=>{
-      if(!__gotCloud){ stampSync(); __lastTs=DB.__ts; window.__fb.push(DB); updateSyncBadge('ok'); }
-    }, 1500);
+    /* بدل الافتراض بالتوقيت (سباق خطر على شبكة بطيئة)، نتأكد فعلياً هل السحابة فاضية أو لأ */
+    if(window.__fb.getOnce){
+      window.__fb.getOnce().then(v=>{
+        if(__gotCloud) return;               /* الـ subscribe العادي وصله رد فعلي، خلاص */
+        if(v && v.payload){
+          /* فيه بيانات في السحابة فعلاً — الاستماع العادي هيستقبلها، منعملش حاجة */
+          return;
+        }
+        /* اتأكدنا: السحابة فاضية فعلاً — آمن نبذرها ببياناتي */
+        stampSync(); __lastTs=DB.__ts; pushNow();
+      }).catch(()=>{
+        /* فشلت القراءة (شبكة ضعيفة) — منخاطرش، نستنى الاستماع العادي بدل الافتراض */
+      });
+    } else {
+      /* توافقاً مع أي نسخة قديمة من window.__fb ما فيهاش getOnce */
+      setTimeout(()=>{ if(!__gotCloud){ stampSync(); __lastTs=DB.__ts; pushNow(); } }, 1500);
+    }
   }
   if(window.__fb&&window.__fb.ready) attach();
   else window.addEventListener('fb-ready',attach);
@@ -537,7 +552,7 @@ function renderShell(){
   $('#app').innerHTML=`
   <div class="hero">
     <div class="hero-top">
-      <div><h1>🏭 مصنع الكوثر للأعلاف</h1><p>نظام الإدارة الشامل · <span style="font-weight:800">v21</span> · <span id="syncBadge" style="font-weight:700">☁️ متزامن</span><br><span id="syncInfo" style="font-size:11px;opacity:.9">تحديث #0</span><br><span style="font-size:11px;opacity:.95">👤 ${currentUser?currentUser.name:""} · ${currentUser&&DB.roles[currentUser.role]?DB.roles[currentUser.role].label:""}</span></p></div>
+      <div><h1>🏭 مصنع الكوثر للأعلاف</h1><p>نظام الإدارة الشامل · <span style="font-weight:800">v22</span> · <span id="syncBadge" style="font-weight:700">☁️ متزامن</span><br><span id="syncInfo" style="font-size:11px;opacity:.9">تحديث #0</span><br><span style="font-size:11px;opacity:.95">👤 ${currentUser?currentUser.name:""} · ${currentUser&&DB.roles[currentUser.role]?DB.roles[currentUser.role].label:""}</span></p></div>
       <div class="hero-actions">
         <button class="hbtn" onclick="downloadBackup()" title="نسخة احتياطية">💾</button>
         <button class="hbtn" onclick="exportExcel()" title="تصدير">📤</button>
