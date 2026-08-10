@@ -161,11 +161,15 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 const dataRef = ref(db, "kawthar/data");
+const snapsRef = ref(db, "kawthar/snapshots");   /* مسار منفصل — مستقل عن بيانات المزامنة الأساسية */
 window.__fb = {
   ready:true,
   push:(obj)=>{ return set(dataRef, {payload:JSON.stringify(obj), ts:Date.now()}); },
   subscribe:(cb)=>{ onValue(dataRef,(snap)=>{ const v=snap.val(); if(v&&v.payload) cb(v.payload, v.ts); }); },
-  getOnce:()=>get(dataRef).then(snap=>snap.val())
+  getOnce:()=>get(dataRef).then(snap=>snap.val()),
+  /* لقطات الأمان: كل جهاز بيرفع لقطته في مفتاح خاص بيه، فمفيش تداخل حتى لو رفعوا في نفس اللحظة */
+  pushSnapshot:(id,obj)=>{ return set(ref(db,"kawthar/snapshots/"+id), obj); },
+  listSnapshots:()=>get(snapsRef).then(snap=>snap.val()||{})
 };
 window.dispatchEvent(new Event("fb-ready"));
 </script>
@@ -213,7 +217,7 @@ function load(){
   if(!DB.roles||typeof DB.roles!=='object') DB.roles=f.roles||{};
   for(const k in f){ if(DB[k]===undefined) DB[k]=f[k]; }
 }
-const APP_VERSION='v26 — إصلاح esc';
+const APP_VERSION='v27 — لقطات سحابية مشتركة';
 // دمج ذكي: يوحّد السجلات من غير ما يحذف أي حاجة من الطرفين
 function recKey(r){ return JSON.stringify(r); }
 function mergeArrays(a,b){
@@ -287,14 +291,28 @@ function acceptConflict(){
 }
 
 let __lastCloudSnap=0;
+function deviceTag(){
+  try{
+    let t=localStorage.getItem('feedmill_device_tag');
+    if(!t){ t='dev_'+Math.random().toString(36).slice(2,8); localStorage.setItem('feedmill_device_tag',t); }
+    return t;
+  }catch(e){ return 'dev_unknown'; }
+}
 function snapshotBeforeCloudApply(){
   try{
     if(Date.now()-__lastCloudSnap<120000) return;   /* مش أكتر من واحدة كل دقيقتين */
     __lastCloudSnap=Date.now();
+    const snapObj={t:Date.now(),date:new Date().toLocaleString('ar-EG'),data:snapshotDB()};
+    /* محلي — سريع، متاح فوراً من غير نت */
     let snaps=JSON.parse(localStorage.getItem('feedmill_cloud_snaps')||'[]');
-    snaps.push({t:Date.now(),date:new Date().toLocaleString('ar-EG'),data:snapshotDB()});
+    snaps.push(snapObj);
     while(snaps.length>5) snaps.shift();
     localStorage.setItem('feedmill_cloud_snaps',JSON.stringify(snaps));
+    /* سحابة — تأمين إضافي: حتى لو الجهاز ده ضاع كاشه بالكامل، اللقطة موجودة عند أي جهاز تاني */
+    if(window.__fb&&window.__fb.pushSnapshot){
+      const id=deviceTag()+'_'+Date.now();
+      window.__fb.pushSnapshot(id, {...snapObj, device:deviceTag()}).catch(()=>{});
+    }
   }catch(e){}
 }
 
@@ -619,7 +637,7 @@ function renderShell(){
   $('#app').innerHTML=`
   <div class="hero">
     <div class="hero-top">
-      <div><h1>🏭 مصنع الكوثر للأعلاف</h1><p>نظام الإدارة الشامل · <span style="font-weight:800">v26</span> · <span id="syncBadge" style="font-weight:700">☁️ متزامن</span><br><span id="syncInfo" style="font-size:11px;opacity:.9">تحديث #0</span><br><span style="font-size:11px;opacity:.95">👤 ${currentUser?currentUser.name:""} · ${currentUser&&DB.roles[currentUser.role]?DB.roles[currentUser.role].label:""}</span></p></div>
+      <div><h1>🏭 مصنع الكوثر للأعلاف</h1><p>نظام الإدارة الشامل · <span style="font-weight:800">v27</span> · <span id="syncBadge" style="font-weight:700">☁️ متزامن</span><br><span id="syncInfo" style="font-size:11px;opacity:.9">تحديث #0</span><br><span style="font-size:11px;opacity:.95">👤 ${currentUser?currentUser.name:""} · ${currentUser&&DB.roles[currentUser.role]?DB.roles[currentUser.role].label:""}</span></p></div>
       <div class="hero-actions">
         <button class="hbtn" onclick="downloadBackup()" title="نسخة احتياطية">💾</button>
         <button class="hbtn" onclick="exportExcel()" title="تصدير">📤</button>
@@ -984,22 +1002,44 @@ function vSettings(){
 function emergencySnaps(){
   try{ return JSON.parse(localStorage.getItem('feedmill_cloud_snaps')||'[]'); }catch(e){ return []; }
 }
+/* لقطات كل الأجهزة من السحابة — مصدر ثاني، لو الجهاز الحالي مش عنده اللقطة أصلاً */
+let __cloudSnapsCache=null;
+function loadCloudSnapsAsync(){
+  if(!window.__fb||!window.__fb.listSnapshots) return;
+  window.__fb.listSnapshots().then(obj=>{
+    __cloudSnapsCache=Object.keys(obj||{}).map(k=>({...obj[k], _cloudId:k}));
+    const box=document.getElementById('emergencySnapsBox');
+    if(box) box.innerHTML=emergencySnapsHtml();
+  }).catch(()=>{});
+}
+function allSnaps(){
+  const local=emergencySnaps().map((s,i)=>({...s,_src:'local',_i:i}));
+  const cloud=(__cloudSnapsCache||[]).map(s=>({...s,_src:'cloud'}));
+  /* دمج + إزالة التكرار (نفس الجهاز ممكن تظهر لقطته في الاتنين) */
+  const seen=new Set(), out=[];
+  local.concat(cloud).sort((a,b)=>(b.t||0)-(a.t||0)).forEach(s=>{
+    const k=s.t+'|'+(s.device||'local');
+    if(!seen.has(k)){ seen.add(k); out.push(s); }
+  });
+  return out;
+}
 function emergencySnapsHtml(){
-  const snaps=emergencySnaps();
-  if(!snaps.length) return '';
-  const rows=snaps.slice().reverse().map((s,ri)=>{
-    const i=snaps.length-1-ri;
+  if(__cloudSnapsCache===null) loadCloudSnapsAsync();   /* أول مرة، اجيب لقطات السحابة في الخلفية */
+  const snaps=allSnaps();
+  if(!snaps.length) return '<div id="emergencySnapsBox"></div>';
+  const rows=snaps.map((s,i)=>{
     let cnt=0;
     try{ const d=JSON.parse(s.data); ['production','dispatch','matIncoming','matDispatch','opening','matOpen'].forEach(k=>cnt+=(d[k]||[]).length); }catch(e){}
-    return `<tr><td>${esc(s.date||'')}</td><td style="font-weight:700;color:#6366f1">${cnt} سجل</td>
+    const srcTag=s._src==='cloud'?'<span class="pill" style="background:#dbeafe;color:#1e40af">☁️ من جهاز تاني</span>':'<span class="pill" style="background:#dcfce7;color:#166534">📱 هذا الجهاز</span>';
+    return `<tr><td>${esc(s.date||'')}</td><td style="font-weight:700;color:#6366f1">${cnt} سجل</td><td>${srcTag}</td>
       <td><button class="btn btn-ghost btn-sm" onclick="restoreEmergencySnap(${i})">↩️ رجّع النسخة دي</button></td></tr>`;
   }).join('');
-  return `<div class="card" style="border:2px solid #f59e0b"><h3><span class="d" style="background:#f59e0b"></span>🆘 لقطات أمان تلقائية (قبل أي استبدال من السحابة)</h3>
-    <p class="hint" style="margin-bottom:10px">النظام بياخد نسخة من بياناتك تلقائي قبل أي استبدال من جهاز تاني. لو حصل تراجع في البيانات، تقدر ترجع لأي نسخة من هنا.</p>
-    <div class="tbl-wrap"><table><thead><tr><th>الوقت</th><th>عدد السجلات</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+  return `<div id="emergencySnapsBox"><div class="card" style="border:2px solid #f59e0b"><h3><span class="d" style="background:#f59e0b"></span>🆘 لقطات أمان تلقائية (قبل أي استبدال من السحابة)</h3>
+    <p class="hint" style="margin-bottom:10px">النظام بياخد نسخة من بياناتك تلقائي قبل أي استبدال من جهاز تاني — محفوظة على الجهاز وفي السحابة كمان، فمتاحة من أي جهاز. لو حصل تراجع في البيانات، تقدر ترجع لأي نسخة من هنا.</p>
+    <div class="tbl-wrap"><table><thead><tr><th>الوقت</th><th>عدد السجلات</th><th>المصدر</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
 }
 function restoreEmergencySnap(i){
-  const snaps=emergencySnaps(); const s=snaps[i]; if(!s) return;
+  const snaps=allSnaps(); const s=snaps[i]; if(!s) return;
   let cnt=0;
   try{ const d=JSON.parse(s.data); ['production','dispatch','matIncoming','matDispatch','opening','matOpen'].forEach(k=>cnt+=(d[k]||[]).length); }catch(e){}
   confirmBox('استرجاع نسخة '+esc(s.date)+'؟','فيها '+cnt+' سجل. هيتم استبدال بياناتك الحالية بيها (هنعمل نسخة من الحالي قبلها للأمان).',()=>{
