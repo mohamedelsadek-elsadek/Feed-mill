@@ -207,7 +207,7 @@ function load(){
   catch(e){DB=freshFromSeed();}
   const f=freshFromSeed(); for(const k in f){ if(DB[k]===undefined) DB[k]=f[k]; }
 }
-const APP_VERSION='v22 — إصلاح سباق الاتصال';
+const APP_VERSION='v24 — استرجاع بضغطة واحدة';
 // دمج ذكي: يوحّد السجلات من غير ما يحذف أي حاجة من الطرفين
 function recKey(r){ return JSON.stringify(r); }
 function mergeArrays(a,b){
@@ -234,6 +234,52 @@ function mergeDB(local,remote){
 }
 
 /* لقطة أمان قبل ما بيانات السحابة تستبدل المحلي — مخزّنة بره DB نفسها عشان متتمسحش معاها */
+
+/* إجمالي عدد السجلات الفعلية — مقياس حقيقي لكمية البيانات، عكس __ts اللي بس بيقول "امتى اتحفظ" */
+function totalRecords(db){
+  const arrs=['production','dispatch','matIncoming','matDispatch','opening','matOpen'];
+  return arrs.reduce((s,k)=>s+((db&&Array.isArray(db[k]))?db[k].length:0),0);
+}
+
+
+function pendingConflict(){
+  try{ return JSON.parse(localStorage.getItem('feedmill_conflict')||'null'); }catch(e){ return null; }
+}
+function conflictBannerHtml(){
+  const c=pendingConflict(); if(!c) return '';
+  const d=new Date(c.t).toLocaleString('ar-EG');
+  return `<div style="background:#fef2f2;border:2px solid #f87171;border-radius:12px;padding:14px 16px;margin-bottom:16px">
+    <div style="font-weight:800;color:#b91c1c;margin-bottom:6px">⚠️ فيه تحديث من جهاز تاني اتوقف تلقائياً</div>
+    <div style="font-size:13px;color:#7f1d1d;line-height:1.8">
+      وصل بتاريخ ${d}. بياناتك الحالية فيها <b>${c.myCount}</b> سجل، والتحديث اللي وصل فيه <b>${c.rCount}</b> سجل بس.<br>
+      ده ممكن يكون تراجع حقيقي (جهاز قديم اتفتح غلط) أو يكون هو الصح وإنت اللي عندك تكرار. راجع الأرقام قبل ما تقرر.
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+      <button class="btn btn-ghost" onclick="rejectConflict()">🗑 تجاهل التحديث الجديد (خلي بياناتي)</button>
+      <button class="btn" style="background:#dc2626;color:#fff" onclick="acceptConflict()">⚠️ استبدل ببيانات التحديث الجديد</button>
+    </div>
+  </div>`;
+}
+function rejectConflict(){
+  localStorage.removeItem('feedmill_conflict');
+  toast('تم تجاهل التحديث — بياناتك الحالية باقية زي ما هي');
+  updateSyncBadge('ok'); renderView();
+}
+function acceptConflict(){
+  const c=pendingConflict(); if(!c) return;
+  confirmBox('استبدال ببيانات التحديث؟','هيتم استبدال بياناتك الحالية ('+c.myCount+' سجل) بالتحديث الجديد ('+c.rCount+' سجل). هنعمل نسخة من الحالي قبلها.',()=>{
+    manualSnapshot('قبل قبول تحديث متعارض');
+    try{
+      const remote=JSON.parse(c.data);
+      DB=remote; __mySeq=remote.__seq||0;
+      localStorage.setItem(KEY,JSON.stringify(DB));
+      localStorage.removeItem('feedmill_conflict');
+      renderView(); refreshSyncHeader(); updateSyncBadge('ok');
+      toast('تم الاستبدال');
+    }catch(e){ toast('فشل الاستبدال — البيانات تالفة'); }
+  });
+}
+
 let __lastCloudSnap=0;
 function snapshotBeforeCloudApply(){
   try{
@@ -285,6 +331,7 @@ function updateSyncBadge(state){
   if(state==='sync'){el.textContent='\u23f3 يزامن...';el.style.color='#fde68a';}
   else if(state==='ok'){el.textContent='\u2601\ufe0f متزامن';el.style.color='#bbf7d0';}
   else if(state==='off'){el.textContent='\ud83d\udcf4 أوفلاين';el.style.color='#e8e6ff';}
+  else if(state==='conflict'){el.textContent='\u26a0\ufe0f فيه تعارض — راجع الإعدادات';el.style.color='#fecaca';}
   const info=document.getElementById('syncInfo');
   if(info){
     const seq=DB.__seq||0;
@@ -307,6 +354,19 @@ function startSync(){
         /* الحَكَم الوحيد: مين الأحدث زمنياً فعلاً. الختم بيتسجل وقت الحفظ نفسه،
            فمفيش داعي لعلامة "معلّق" تمنع قبول تحديث أحدث فعلاً بسبب توقيت الشبكة. */
         if(rTs<=myTs){ updateSyncBadge('ok'); return; }
+        /* حارس ضد التراجع: تحديث "أحدث بالوقت" بس فيه سجلات أقل بوضوح = علامة خطر،
+           مش بالضرورة صح — يوقف الاستبدال التلقائي ويسأل بدل ما يمسح بيانات أكتر ببيانات أقل. */
+        const myCount=totalRecords(DB), rCount=totalRecords(remote);
+        if(myCount>0 && rCount < myCount*0.8){
+          snapshotBeforeCloudApply();   /* احفظ نسخة من التحديث المشكوك فيه للمراجعة بره DB الحالية */
+          try{
+            let pend=JSON.parse(localStorage.getItem('feedmill_conflict')||'null');
+            localStorage.setItem('feedmill_conflict', JSON.stringify({t:Date.now(),myCount,rCount,data:payload}));
+          }catch(e){}
+          updateSyncBadge('conflict');
+          if(typeof toast==='function') toast('⚠️ وصل تحديث فيه بيانات أقل بوضوح ('+rCount+' مقابل '+myCount+') — اتوقف تلقائياً، راجع الإعدادات','⚠️');
+          return;
+        }
         snapshotBeforeCloudApply();   /* لقطة أمان قبل الاستبدال */
         __fbApplying=true;
         DB=remote; __mySeq=remote.__seq||0;
@@ -552,7 +612,7 @@ function renderShell(){
   $('#app').innerHTML=`
   <div class="hero">
     <div class="hero-top">
-      <div><h1>🏭 مصنع الكوثر للأعلاف</h1><p>نظام الإدارة الشامل · <span style="font-weight:800">v22</span> · <span id="syncBadge" style="font-weight:700">☁️ متزامن</span><br><span id="syncInfo" style="font-size:11px;opacity:.9">تحديث #0</span><br><span style="font-size:11px;opacity:.95">👤 ${currentUser?currentUser.name:""} · ${currentUser&&DB.roles[currentUser.role]?DB.roles[currentUser.role].label:""}</span></p></div>
+      <div><h1>🏭 مصنع الكوثر للأعلاف</h1><p>نظام الإدارة الشامل · <span style="font-weight:800">v24</span> · <span id="syncBadge" style="font-weight:700">☁️ متزامن</span><br><span id="syncInfo" style="font-size:11px;opacity:.9">تحديث #0</span><br><span style="font-size:11px;opacity:.95">👤 ${currentUser?currentUser.name:""} · ${currentUser&&DB.roles[currentUser.role]?DB.roles[currentUser.role].label:""}</span></p></div>
       <div class="hero-actions">
         <button class="hbtn" onclick="downloadBackup()" title="نسخة احتياطية">💾</button>
         <button class="hbtn" onclick="exportExcel()" title="تصدير">📤</button>
@@ -585,7 +645,7 @@ function vDash(){
   const rows=fb.filter(x=>x.open||x.prod||x.disp||x.bal).map(x=>`<tr>
     <td style="font-weight:700">${x.feed}</td><td><span class="pill ${x.form==='محبب'?'m':'f'}">${x.form}</span></td>
     <td style="font-weight:800;color:#6366f1">${fmt(x.bal)}</td></tr>`).join('')||'<tr><td colspan=3 class=empty>لا توجد بيانات بعد</td></tr>';
-  return `<h2 class="sec">لوحة التحكم</h2>
+  return `${conflictBannerHtml()}<h2 class="sec">لوحة التحكم</h2>
   <div class="kpis">
     <div class="kpi"><div class="lbl">رصيد العلف الكلي</div><div class="val">${fmt(totBal)} <span class="u">كيلو</span></div></div>
     <div class="kpi"><div class="lbl">إجمالي الإنتاج</div><div class="val">${fmt(totProd)} <span class="u">كيلو</span></div></div>
@@ -885,6 +945,8 @@ function renderReport(){
 /* ============ Settings ============ */
 function vSettings(){
   return `<h2 class="sec">الإعدادات</h2>
+  ${conflictBannerHtml()}
+  ${emergencySnapsHtml()}
   ${listCard('🌾 أنواع العلف','feeds','أضف نوع علف')}
   ${listCard('📦 الخامات','materials','أضف خامة')}
   ${listCard('🏬 المخازن','stores','أضف مخزن')}
@@ -895,6 +957,41 @@ function vSettings(){
     <button class="btn btn-ghost" onclick="importBackup()">📂 استرجاع</button></div>
     <p class="hint" style="margin:10px 0">النسخ التلقائي شغّال: نسخة يومية تُحفظ داخل النظام وتتنظّف بعد 30 يوم (${DB.backups.length} نسخة محفوظة).</p>
     <button class="btn btn-danger btn-block" onclick="resetData()">🗑️ تصفير كل البيانات (بكلمة سر)</button></div>`;
+}
+/* ===== لقطات الطوارئ — واجهة بضغطة واحدة، من غير كونسول ===== */
+function emergencySnaps(){
+  try{ return JSON.parse(localStorage.getItem('feedmill_cloud_snaps')||'[]'); }catch(e){ return []; }
+}
+function emergencySnapsHtml(){
+  const snaps=emergencySnaps();
+  if(!snaps.length) return '';
+  const rows=snaps.slice().reverse().map((s,ri)=>{
+    const i=snaps.length-1-ri;
+    let cnt=0;
+    try{ const d=JSON.parse(s.data); ['production','dispatch','matIncoming','matDispatch','opening','matOpen'].forEach(k=>cnt+=(d[k]||[]).length); }catch(e){}
+    return `<tr><td>${esc(s.date||'')}</td><td style="font-weight:700;color:#6366f1">${cnt} سجل</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="restoreEmergencySnap(${i})">↩️ رجّع النسخة دي</button></td></tr>`;
+  }).join('');
+  return `<div class="card" style="border:2px solid #f59e0b"><h3><span class="d" style="background:#f59e0b"></span>🆘 لقطات أمان تلقائية (قبل أي استبدال من السحابة)</h3>
+    <p class="hint" style="margin-bottom:10px">النظام بياخد نسخة من بياناتك تلقائي قبل أي استبدال من جهاز تاني. لو حصل تراجع في البيانات، تقدر ترجع لأي نسخة من هنا.</p>
+    <div class="tbl-wrap"><table><thead><tr><th>الوقت</th><th>عدد السجلات</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+}
+function restoreEmergencySnap(i){
+  const snaps=emergencySnaps(); const s=snaps[i]; if(!s) return;
+  let cnt=0;
+  try{ const d=JSON.parse(s.data); ['production','dispatch','matIncoming','matDispatch','opening','matOpen'].forEach(k=>cnt+=(d[k]||[]).length); }catch(e){}
+  confirmBox('استرجاع نسخة '+esc(s.date)+'؟','فيها '+cnt+' سجل. هيتم استبدال بياناتك الحالية بيها (هنعمل نسخة من الحالي قبلها للأمان).',()=>{
+    try{
+      manualSnapshot('قبل استرجاع لقطة طوارئ');
+      const partial=JSON.parse(s.data);
+      DB={...DB,...partial};
+      stampSync();
+      localStorage.setItem(KEY,JSON.stringify(DB));
+      forcePushNow();
+      toast('✅ تم الاسترجاع ورفعه للسحابة');
+      renderView();
+    }catch(e){ toast('فشل الاسترجاع — بيانات اللقطة تالفة'); }
+  });
 }
 function listCard(title,key,ph){
   const items=DB[key];
