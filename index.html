@@ -205,9 +205,15 @@ function freshFromSeed(){
 function load(){
   try{const r=localStorage.getItem(KEY);DB=r?JSON.parse(r):freshFromSeed();}
   catch(e){DB=freshFromSeed();}
-  const f=freshFromSeed(); for(const k in f){ if(DB[k]===undefined) DB[k]=f[k]; }
+  const f=freshFromSeed();
+  /* تحقق حقيقي: undefined أو null أو نوع غلط (مش بس undefined) — عشان مفيش .forEach يقع أبداً */
+  const arrKeys=['feeds','materials','stores','farms','suppliers','opening','matOpen','production','dispatch','matIncoming','matDispatch','dailyExtra','users','backups'];
+  arrKeys.forEach(k=>{ if(!Array.isArray(DB[k])) DB[k]=Array.isArray(f[k])?f[k]:[]; });
+  if(!DB.recipe||typeof DB.recipe!=='object') DB.recipe=f.recipe||{};
+  if(!DB.roles||typeof DB.roles!=='object') DB.roles=f.roles||{};
+  for(const k in f){ if(DB[k]===undefined) DB[k]=f[k]; }
 }
-const APP_VERSION='v24 — استرجاع بضغطة واحدة';
+const APP_VERSION='v25 — حماية العرض';
 // دمج ذكي: يوحّد السجلات من غير ما يحذف أي حاجة من الطرفين
 function recKey(r){ return JSON.stringify(r); }
 function mergeArrays(a,b){
@@ -612,7 +618,7 @@ function renderShell(){
   $('#app').innerHTML=`
   <div class="hero">
     <div class="hero-top">
-      <div><h1>🏭 مصنع الكوثر للأعلاف</h1><p>نظام الإدارة الشامل · <span style="font-weight:800">v24</span> · <span id="syncBadge" style="font-weight:700">☁️ متزامن</span><br><span id="syncInfo" style="font-size:11px;opacity:.9">تحديث #0</span><br><span style="font-size:11px;opacity:.95">👤 ${currentUser?currentUser.name:""} · ${currentUser&&DB.roles[currentUser.role]?DB.roles[currentUser.role].label:""}</span></p></div>
+      <div><h1>🏭 مصنع الكوثر للأعلاف</h1><p>نظام الإدارة الشامل · <span style="font-weight:800">v25</span> · <span id="syncBadge" style="font-weight:700">☁️ متزامن</span><br><span id="syncInfo" style="font-size:11px;opacity:.9">تحديث #0</span><br><span style="font-size:11px;opacity:.95">👤 ${currentUser?currentUser.name:""} · ${currentUser&&DB.roles[currentUser.role]?DB.roles[currentUser.role].label:""}</span></p></div>
       <div class="hero-actions">
         <button class="hbtn" onclick="downloadBackup()" title="نسخة احتياطية">💾</button>
         <button class="hbtn" onclick="exportExcel()" title="تصدير">📤</button>
@@ -631,10 +637,25 @@ function renderShell(){
 function go(k){active=k;renderShell();window.scrollTo(0,0);}
 function renderView(){
   const map={dash:vDash,prod:vProd,disp:vDisp,matin:vMatIn,matdisp:vMatDisp,feedbal:vFeedBal,matbal:vMatBal,store:vStore,recipe:vRecipe,report:vReport,daily:vDaily,backups:vBackups,users:vUsers,settings:vSettings};
-  $('#wrap').innerHTML=(map[active]||vDash)();
-  if(active==='dash')drawDash();
-  if(active==='report')initReport();
-  if(active==='prod')previewConsume();
+  try{
+    $('#wrap').innerHTML=(map[active]||vDash)();
+    if(active==='dash')drawDash();
+    if(active==='report')initReport();
+    if(active==='prod')previewConsume();
+  }catch(e){
+    console.error('renderView فشلت:',e);
+    try{
+      $('#wrap').innerHTML=`<div class="card" style="border:2px solid #ef4444">
+        <h3 style="color:#b91c1c">⚠️ حصلت مشكلة في عرض الصفحة</h3>
+        <p class="hint" style="margin:10px 0">البيانات موجودة وسليمة، المشكلة في العرض بس. جرّب:</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+          <button class="btn btn-pri" onclick="go('dash')">🏠 الرئيسية</button>
+          <button class="btn btn-ghost" onclick="location.reload()">🔄 تحديث الصفحة</button>
+        </div>
+        <div style="font-size:11px;color:#9ca3af;direction:ltr;word-break:break-word;text-align:left">${String(e&&e.message||e).replace(/[<>&]/g,'')}</div>
+      </div>`;
+    }catch(_e){}
+  }
 }
 
 /* ============ Dashboard ============ */
@@ -1038,6 +1059,7 @@ function vBackups(){
     <td><span class="del" onclick="delOneBackup(${b._i})">✕</span></td></tr>`).join('')
     :'<tr><td colspan=6 class=empty><div class=ic>💾</div>لا توجد نسخ بعد</td></tr>';
   return `<h2 class="sec">النسخ الاحتياطية</h2>
+  ${emergencySnapsHtml()}
   <div class="card"><p class="hint" style="margin-bottom:14px">النظام بيحفظ نسخة تلقائياً كل يوم، ويحتفظ بآخر 30 نسخة. تقدر تسترجع أو تنزّل أو تحذف أي نسخة. (${(DB.backups||[]).length}/30 نسخة)</p>
     <button class="btn btn-pri btn-block" style="margin-bottom:14px" onclick="manualSnapshot('يدوي');toast('تم حفظ نسخة');renderView();">📸 احفظ نسخة الآن</button>
     <div class="tbl-wrap"><table><thead><tr><th>التاريخ</th><th>النوع</th><th>الوقت</th><th>استرجاع</th><th>تنزيل</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
