@@ -217,7 +217,7 @@ function load(){
   if(!DB.roles||typeof DB.roles!=='object') DB.roles=f.roles||{};
   for(const k in f){ if(DB[k]===undefined) DB[k]=f[k]; }
 }
-const APP_VERSION='v27 — لقطات سحابية مشتركة';
+const APP_VERSION='v28 — إصلاح ختم الحفظ الفوري';
 // دمج ذكي: يوحّد السجلات من غير ما يحذف أي حاجة من الطرفين
 function recKey(r){ return JSON.stringify(r); }
 function mergeArrays(a,b){
@@ -320,7 +320,7 @@ let __fbTimer=null, __fbApplying=false, __lastTs=0;
 function cloudPush(){
   if(!window.__fb||!window.__fb.ready) return;
   clearTimeout(__fbTimer);
-  __fbTimer=setTimeout(()=>{ stampSync(); __lastTs=DB.__ts; pushNow(); }, 600);
+  __fbTimer=setTimeout(()=>{ __lastTs=DB.__ts; pushNow(); }, 600);   /* الختم اتعمل فورًا في save() خلاص */
 }
 function pushNow(){
   if(!window.__fb||!window.__fb.ready) return;
@@ -344,6 +344,7 @@ function forcePushNow(){
 }
 function save(){
   DB.updated=new Date().toISOString();
+  if(!__fbApplying) stampSync();   /* الختم الزمني فورًا — مش مؤجل لحد ما الرفع يحصل بعد 600ms */
   localStorage.setItem(KEY,JSON.stringify(DB));
   try{ if(!__fbApplying) localStorage.setItem('feedmill_dirty','1'); }catch(e){}
   autoBackup();
@@ -637,7 +638,7 @@ function renderShell(){
   $('#app').innerHTML=`
   <div class="hero">
     <div class="hero-top">
-      <div><h1>🏭 مصنع الكوثر للأعلاف</h1><p>نظام الإدارة الشامل · <span style="font-weight:800">v27</span> · <span id="syncBadge" style="font-weight:700">☁️ متزامن</span><br><span id="syncInfo" style="font-size:11px;opacity:.9">تحديث #0</span><br><span style="font-size:11px;opacity:.95">👤 ${currentUser?currentUser.name:""} · ${currentUser&&DB.roles[currentUser.role]?DB.roles[currentUser.role].label:""}</span></p></div>
+      <div><h1>🏭 مصنع الكوثر للأعلاف</h1><p>نظام الإدارة الشامل · <span style="font-weight:800">v28</span> · <span id="syncBadge" style="font-weight:700">☁️ متزامن</span><br><span id="syncInfo" style="font-size:11px;opacity:.9">تحديث #0</span><br><span style="font-size:11px;opacity:.95">👤 ${currentUser?currentUser.name:""} · ${currentUser&&DB.roles[currentUser.role]?DB.roles[currentUser.role].label:""}</span></p></div>
       <div class="hero-actions">
         <button class="hbtn" onclick="downloadBackup()" title="نسخة احتياطية">💾</button>
         <button class="hbtn" onclick="exportExcel()" title="تصدير">📤</button>
