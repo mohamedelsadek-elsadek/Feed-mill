@@ -217,7 +217,7 @@ function load(){
   if(!DB.roles||typeof DB.roles!=='object') DB.roles=f.roles||{};
   for(const k in f){ if(DB[k]===undefined) DB[k]=f[k]; }
 }
-const APP_VERSION='v32 — إضافة تركيبة مباشرة';
+const APP_VERSION='v33 — تمرجح للتكرار';
 // دمج ذكي: يوحّد السجلات من غير ما يحذف أي حاجة من الطرفين
 function recKey(r){ return JSON.stringify(r); }
 function mergeArrays(a,b){
@@ -651,7 +651,7 @@ function renderShell(){
   $('#app').innerHTML=`
   <div class="hero">
     <div class="hero-top">
-      <div><h1>🏭 مصنع الكوثر للأعلاف</h1><p>نظام الإدارة الشامل · <span style="font-weight:800">v32</span> · <span id="syncBadge" style="font-weight:700">☁️ متزامن</span><br><span id="syncInfo" style="font-size:11px;opacity:.9">تحديث #0</span><br><span style="font-size:11px;opacity:.95">👤 ${currentUser?currentUser.name:""} · ${currentUser&&DB.roles[currentUser.role]?DB.roles[currentUser.role].label:""}</span></p></div>
+      <div><h1>🏭 مصنع الكوثر للأعلاف</h1><p>نظام الإدارة الشامل · <span style="font-weight:800">v33</span> · <span id="syncBadge" style="font-weight:700">☁️ متزامن</span><br><span id="syncInfo" style="font-size:11px;opacity:.9">تحديث #0</span><br><span style="font-size:11px;opacity:.95">👤 ${currentUser?currentUser.name:""} · ${currentUser&&DB.roles[currentUser.role]?DB.roles[currentUser.role].label:""}</span></p></div>
       <div class="hero-actions">
         <button class="hbtn" onclick="downloadBackup()" title="نسخة احتياطية">💾</button>
         <button class="hbtn" onclick="exportExcel()" title="تصدير">📤</button>
@@ -964,12 +964,36 @@ function addFeedFromRecipe(){
   if(!requirePerm('recipe')&&!requirePerm('settings')){ toast('مالكش صلاحية','⚠️'); return; }
   const el=$('#add_feeds_recipe'); const v=(el.value||'').trim();
   if(!v){ toast('اكتب اسم نوع العلف الأول','⚠️'); return; }
-  if(DB.feeds.includes(v)){ toast('نوع العلف ده موجود بالفعل','⚠️'); return; }
+  const existIdx=DB.feeds.indexOf(v);
+  if(existIdx>-1){
+    toast('نوع العلف ده موجود بالفعل — هوريك مكانه في الجدول','⚠️');
+    scrollToFeedColumn(existIdx);
+    return;
+  }
   DB.feeds.push(v);
   DB.materials.forEach(m=>{ if(!DB.recipe[m]) DB.recipe[m]=[]; DB.recipe[m].push(0); });
   save();
   toast('✅ اتضافت تركيبة "'+v+'" — عبّي أرقامها تحت');
   renderView();
+  setTimeout(()=>scrollToFeedColumn(DB.feeds.length-1),50);   /* رجّح الجدول للعمود الجديد فورًا */
+}
+/* يمرجح جدول التركيبات أفقيًا لعمود معيّن ويلمّعه لثانيتين عشان يبان بوضوح */
+function scrollToFeedColumn(idx){
+  try{
+    const wrap=document.querySelector('.tbl-wrap'); if(!wrap) return;
+    const th=wrap.querySelector('thead th[data-fcol="'+idx+'"]');
+    if(!th) return;
+    const cellLeft=th.offsetLeft, wrapWidth=wrap.clientWidth;
+    if(wrap.scrollTo) wrap.scrollTo({ left: Math.max(0, cellLeft - wrapWidth/2 + th.offsetWidth/2), behavior:'smooth' });
+  }catch(e){}
+  /* لمّع كل خانات العمود ده لثانيتين */
+  try{
+    document.querySelectorAll('[data-fcol="'+idx+'"]').forEach(el=>{
+      el.style.transition='background-color .3s';
+      el.style.backgroundColor='#fef08a';
+      setTimeout(()=>{ el.style.backgroundColor=''; }, 2000);
+    });
+  }catch(e){}
 }
 /* تحديث فوري وإنت بتكتب — بيحفظ في DB وبيحدّث خانة الإجمالي بس (من غير إعادة رسم الجدول كله عشان الخانة متفقدش التركيز) */
 
