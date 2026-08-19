@@ -1,6 +1,9 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>نظام مصنع الكوثر للأعلاف</title>
@@ -217,7 +220,7 @@ function load(){
   if(!DB.roles||typeof DB.roles!=='object') DB.roles=f.roles||{};
   for(const k in f){ if(DB[k]===undefined) DB[k]=f[k]; }
 }
-const APP_VERSION='v33 — تمرجح للتكرار';
+const APP_VERSION='v35 — كاشف التحديث التلقائي';
 // دمج ذكي: يوحّد السجلات من غير ما يحذف أي حاجة من الطرفين
 function recKey(r){ return JSON.stringify(r); }
 function mergeArrays(a,b){
@@ -395,14 +398,23 @@ function startSync(){
         /* حارس ضد التراجع: تحديث "أحدث بالوقت" بس فيه سجلات أقل بوضوح = علامة خطر،
            مش بالضرورة صح — يوقف الاستبدال التلقائي ويسأل بدل ما يمسح بيانات أكتر ببيانات أقل. */
         const myCount=totalRecords(DB), rCount=totalRecords(remote);
-        if(myCount>0 && rCount < myCount*0.8){
+        /* فحص مستقل للتركيبة تحديدًا — عشان سجلات تصنيع كتير متغطيش على مسح التركيبة
+           (لو دمجناهم في رقم واحد، سجلات كبيرة تانية ممكن تخفي إن التركيبة نفسها اتصفّرت) */
+        const myRecipeCells=recipeFilledCells(DB), rRecipeCells=recipeFilledCells(remote);
+        const recipeRegressed = myRecipeCells>=3 && rRecipeCells < myRecipeCells*0.7;
+        if((myCount>0 && rCount < myCount*0.8) || recipeRegressed){
           snapshotBeforeCloudApply();   /* احفظ نسخة من التحديث المشكوك فيه للمراجعة بره DB الحالية */
           try{
             let pend=JSON.parse(localStorage.getItem('feedmill_conflict')||'null');
             localStorage.setItem('feedmill_conflict', JSON.stringify({t:Date.now(),myCount,rCount,data:payload}));
           }catch(e){}
           updateSyncBadge('conflict');
-          if(typeof toast==='function') toast('⚠️ وصل تحديث فيه بيانات أقل بوضوح ('+rCount+' مقابل '+myCount+') — اتوقف تلقائياً، راجع الإعدادات','⚠️');
+          if(typeof toast==='function'){
+            const msg = recipeRegressed
+              ? '⚠️ وصل تحديث فيه تركيبة أقل بوضوح ('+rRecipeCells+' خانة مقابل '+myRecipeCells+') — اتوقف تلقائياً'
+              : '⚠️ وصل تحديث فيه بيانات أقل بوضوح ('+rCount+' مقابل '+myCount+') — اتوقف تلقائياً';
+            toast(msg,'⚠️');
+          }
           return;
         }
         snapshotBeforeCloudApply();   /* لقطة أمان قبل الاستبدال */
@@ -651,7 +663,7 @@ function renderShell(){
   $('#app').innerHTML=`
   <div class="hero">
     <div class="hero-top">
-      <div><h1>🏭 مصنع الكوثر للأعلاف</h1><p>نظام الإدارة الشامل · <span style="font-weight:800">v33</span> · <span id="syncBadge" style="font-weight:700">☁️ متزامن</span><br><span id="syncInfo" style="font-size:11px;opacity:.9">تحديث #0</span><br><span style="font-size:11px;opacity:.95">👤 ${currentUser?currentUser.name:""} · ${currentUser&&DB.roles[currentUser.role]?DB.roles[currentUser.role].label:""}</span></p></div>
+      <div><h1>🏭 مصنع الكوثر للأعلاف</h1><p>نظام الإدارة الشامل · <span style="font-weight:800">v35</span> · <span id="syncBadge" style="font-weight:700">☁️ متزامن</span><br><span id="syncInfo" style="font-size:11px;opacity:.9">تحديث #0</span><br><span style="font-size:11px;opacity:.95">👤 ${currentUser?currentUser.name:""} · ${currentUser&&DB.roles[currentUser.role]?DB.roles[currentUser.role].label:""}</span></p></div>
       <div class="hero-actions">
         <button class="hbtn" onclick="downloadBackup()" title="نسخة احتياطية">💾</button>
         <button class="hbtn" onclick="exportExcel()" title="تصدير">📤</button>
@@ -660,6 +672,10 @@ function renderShell(){
       </div>
     </div>
     <div class="tabs">${TABS.filter(([k,n])=>(k==='users'?isSuper():(k==='settings'?(can('settings')||can('all')||isSuper()):true))).map(([k,n])=>`<button class="tab ${k===active?'active':''}" onclick="go('${k}')">${n}</button>`).join('')}</div>
+  </div>
+  <div id="updateBanner" style="display:none;background:#dc2626;padding:12px 16px;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;position:sticky;top:0;z-index:200">
+    <div id="updateBannerText" style="font-size:14px;color:#fff;font-weight:700">🔄 فيه نسخة أحدث من النظام — دوس عشان تحدّث دلوقتي</div>
+    <button class="btn xs" style="background:#fff;color:#dc2626;font-weight:800" onclick="forceReloadFresh()">🔄 حدّث دلوقتي</button>
   </div>
   <div id="multiTabBanner" style="display:none;background:#fef3c7;border-bottom:2px solid #f59e0b;padding:10px 16px;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
     <div style="font-size:13px;color:#92400e"><b>⚠️ البرنامج مفتوح في أكتر من تاب في المتصفح ده</b> — ده سبب رئيسي إن البيانات تتذبذب أو ترجع لحالة قديمة. اقفل التابات الزيادة وسيب واحد بس.</div>
@@ -1031,6 +1047,39 @@ function showMultiTabWarning(){
   const el=document.getElementById('multiTabBanner');
   if(el) el.style.display='flex';
   if(typeof toast==='function') toast('⚠️ البرنامج مفتوح في أكتر من تاب — ده سبب التذبذب في البيانات','⚠️');
+}
+
+
+/* ===== كاشف النسخة القديمة — بيجبر أي جهاز شغّال بكود قديم يتحدّث لوحده =====
+   بدل ما تقفل كل جهاز يدوي، أي تاب مفتوح (حتى لو مش لامسينه) هيكتشف
+   إن فيه نسخة أحدث اترفعت، ويوريك بانر إجباري للتحديث. */
+let __updateChecking=false;
+function checkForNewerVersion(){
+  if(__updateChecking) return; __updateChecking=true;
+  try{
+    fetch(location.pathname+'?_cb='+Date.now(), {cache:'no-store'})
+      .then(r=>r.text())
+      .then(txt=>{
+        __updateChecking=false;
+        const m=/APP_VERSION\s*=\s*'([^']+)'/.exec(txt);
+        if(!m) return;
+        const remoteVer=m[1];
+        if(remoteVer!==APP_VERSION){
+          showUpdateRequiredBanner(remoteVer);
+        }
+      }).catch(()=>{ __updateChecking=false; });
+  }catch(e){ __updateChecking=false; }
+}
+function showUpdateRequiredBanner(newVer){
+  const el=document.getElementById('updateBanner');
+  if(!el) return;
+  el.querySelector('#updateBannerText').textContent = 'فيه نسخة أحدث من النظام ('+newVer+') — دوس عشان تحدّث دلوقتي';
+  el.style.display='flex';
+}
+function forceReloadFresh(){
+  /* تحديث حقيقي يتخطى الكاش تمامًا */
+  const url=location.pathname+'?_cb='+Date.now();
+  location.href=url;
 }
 
 function bindRecipeInputs(){
@@ -1516,7 +1565,7 @@ function exportExcel(){
 }
 
 /* ============ Init ============ */
-load(); renderApp(); updateSyncBadge('ok'); startSync(); loadHtml2pdf(); initTabConflictDetector(); window.addEventListener('online',()=>{updateSyncBadge('ok');cloudPush();}); window.addEventListener('offline',()=>updateSyncBadge('off'));
+load(); renderApp(); updateSyncBadge('ok'); startSync(); loadHtml2pdf(); initTabConflictDetector(); setTimeout(checkForNewerVersion,3000); setInterval(checkForNewerVersion,60000); window.addEventListener('online',()=>{updateSyncBadge('ok');cloudPush();checkForNewerVersion();}); window.addEventListener('offline',()=>updateSyncBadge('off'));
 
 </script>
 </body>
