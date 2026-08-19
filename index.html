@@ -217,7 +217,7 @@ function load(){
   if(!DB.roles||typeof DB.roles!=='object') DB.roles=f.roles||{};
   for(const k in f){ if(DB[k]===undefined) DB[k]=f[k]; }
 }
-const APP_VERSION='v29 — تركيبة فورية وكاشف تابات';
+const APP_VERSION='v31 — تحصين إضافي للتزامن';
 // دمج ذكي: يوحّد السجلات من غير ما يحذف أي حاجة من الطرفين
 function recKey(r){ return JSON.stringify(r); }
 function mergeArrays(a,b){
@@ -248,7 +248,20 @@ function mergeDB(local,remote){
 /* إجمالي عدد السجلات الفعلية — مقياس حقيقي لكمية البيانات، عكس __ts اللي بس بيقول "امتى اتحفظ" */
 function totalRecords(db){
   const arrs=['production','dispatch','matIncoming','matDispatch','opening','matOpen'];
-  return arrs.reduce((s,k)=>s+((db&&Array.isArray(db[k]))?db[k].length:0),0);
+  let n=arrs.reduce((s,k)=>s+((db&&Array.isArray(db[k]))?db[k].length:0),0);
+  /* التركيبة مالهاش "سجلات" بالمعنى ده، فبنعدّ الخانات المعبّاة (غير صفرية) كوزن مماثل —
+     عشان تراجع/مسح تركيبة يتمسك زي ما بيتمسك نقص أي سجل تاني */
+  n += recipeFilledCells(db);
+  return n;
+}
+function recipeFilledCells(db){
+  if(!db||!db.recipe||typeof db.recipe!=='object') return 0;
+  let n=0;
+  Object.keys(db.recipe).forEach(m=>{
+    const row=db.recipe[m];
+    if(Array.isArray(row)) row.forEach(v=>{ if(+v>0) n++; });
+  });
+  return n;
 }
 
 
@@ -396,10 +409,10 @@ function startSync(){
         __fbApplying=true;
         DB=remote; __mySeq=remote.__seq||0;
         localStorage.setItem(KEY,JSON.stringify(DB));
-        __fbApplying=false;
         renderView();
         refreshSyncHeader();
         updateSyncBadge('ok');
+        __fbApplying=false;   /* بعد ما الرسم يخلص بالكامل — مش قبله، عشان أي حفظة جانبية أثناء الرسم تتحمي برضه */
       }catch(e){console.warn(e);}
     });
     /* بدل الافتراض بالتوقيت (سباق خطر على شبكة بطيئة)، نتأكد فعلياً هل السحابة فاضية أو لأ */
@@ -638,7 +651,7 @@ function renderShell(){
   $('#app').innerHTML=`
   <div class="hero">
     <div class="hero-top">
-      <div><h1>🏭 مصنع الكوثر للأعلاف</h1><p>نظام الإدارة الشامل · <span style="font-weight:800">v29</span> · <span id="syncBadge" style="font-weight:700">☁️ متزامن</span><br><span id="syncInfo" style="font-size:11px;opacity:.9">تحديث #0</span><br><span style="font-size:11px;opacity:.95">👤 ${currentUser?currentUser.name:""} · ${currentUser&&DB.roles[currentUser.role]?DB.roles[currentUser.role].label:""}</span></p></div>
+      <div><h1>🏭 مصنع الكوثر للأعلاف</h1><p>نظام الإدارة الشامل · <span style="font-weight:800">v31</span> · <span id="syncBadge" style="font-weight:700">☁️ متزامن</span><br><span id="syncInfo" style="font-size:11px;opacity:.9">تحديث #0</span><br><span style="font-size:11px;opacity:.95">👤 ${currentUser?currentUser.name:""} · ${currentUser&&DB.roles[currentUser.role]?DB.roles[currentUser.role].label:""}</span></p></div>
       <div class="hero-actions">
         <button class="hbtn" onclick="downloadBackup()" title="نسخة احتياطية">💾</button>
         <button class="hbtn" onclick="exportExcel()" title="تصدير">📤</button>
