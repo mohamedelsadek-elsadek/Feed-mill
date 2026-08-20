@@ -298,7 +298,7 @@ function acceptConflict(){
     try{
       const remote=safeParseSnap(c.data,'acceptConflict');
       DB=remote; __mySeq=remote.__seq||0;
-      localStorage.setItem(KEY,JSON.stringify(DB));
+      saveDBToLocalStorage();
       localStorage.removeItem('feedmill_conflict');
       renderView(); refreshSyncHeader(); updateSyncBadge('ok');
       toast('تم الاستبدال');
@@ -358,13 +358,13 @@ function stampSync(){
 function forcePushNow(){
   __gotCloud=true; clearTimeout(__fbTimer);
   stampSync(); __lastTs=DB.__ts;
-  localStorage.setItem(KEY,JSON.stringify(DB));
+  saveDBToLocalStorage();
   pushNow();
 }
 function save(){
   DB.updated=new Date().toISOString();
   if(!__fbApplying) stampSync();   /* الختم الزمني فورًا — مش مؤجل لحد ما الرفع يحصل بعد 600ms */
-  localStorage.setItem(KEY,JSON.stringify(DB));
+  saveDBToLocalStorage();
   try{ if(!__fbApplying) localStorage.setItem('feedmill_dirty','1'); }catch(e){}
   autoBackup();
   if(!__fbApplying) cloudPush();
@@ -423,7 +423,7 @@ function startSync(){
         snapshotBeforeCloudApply();   /* لقطة أمان قبل الاستبدال */
         __fbApplying=true;
         DB=remote; __mySeq=remote.__seq||0;
-        localStorage.setItem(KEY,JSON.stringify(DB));
+        saveDBToLocalStorage();
         /* لو السحابة جت من جهاز قديم مالوش التركيبة، رجّعها وارفعها تاني */
         try{ if(!DB.__badawyAdded){ __fbApplying=false; ensureBadawyRecipe(); __fbApplying=true; } }catch(e){}
         renderView();
@@ -555,17 +555,46 @@ function autoBackup(){
   if(last&&last.date===t&&last.auto) return;
   DB.backups.push({date:t,time:new Date().toISOString(),auto:true,snapshot:snapshotDB()});
   trimBackups();
-  localStorage.setItem(KEY,JSON.stringify(DB));
+  saveDBToLocalStorage();
 }
 function manualSnapshot(reason){
   if(!DB.backups)DB.backups=[];
   DB.backups.push({date:today(),time:new Date().toISOString(),auto:false,reason:reason||'يدوي',snapshot:snapshotDB()});
   trimBackups();
-  localStorage.setItem(KEY,JSON.stringify(DB));
+  saveDBToLocalStorage();
+}
+/* حفظ آمن في localStorage: لو المساحة المحلية اتعدّت (QuotaExceededError)،
+   امسح أقدم نسخ احتياطية تلقائياً وحاول تاني، بدل ما تفشل العملية كلها */
+function saveDBToLocalStorage(){
+  try{
+    localStorage.setItem(KEY,JSON.stringify(DB));
+    return true;
+  }catch(e){
+    console.warn('localStorage امتلأ، بنقلل النسخ الاحتياطية ونحاول تاني:',e);
+    let freed=false;
+    if(Array.isArray(DB.backups) && DB.backups.length>5){
+      DB.backups=DB.backups.slice(-5);   /* خلي آخر 5 بس مؤقتاً */
+      freed=true;
+    }
+    try{ localStorage.removeItem('feedmill_cloud_snaps'); freed=true; }catch(e2){}
+    if(freed){
+      try{
+        localStorage.setItem(KEY,JSON.stringify(DB));
+        toast('⚠️ مساحة التخزين المحلية كانت ممتلئة — اتنظفت نسخ قديمة تلقائياً عشان الحفظ يكمّل','⚠️');
+        return true;
+      }catch(e3){
+        console.error('لسه فاشل بعد التنظيف:',e3);
+        toast('❌ مساحة التخزين المحلية في المتصفح ممتلئة تماماً — افتح الإعدادات واحذف نسخ احتياطية قديمة يدوياً','❌');
+        return false;
+      }
+    }
+    toast('❌ فشل الحفظ — مساحة التخزين المحلية ممتلئة','❌');
+    return false;
+  }
 }
 function trimBackups(){
-  // keep last 30 snapshots
-  if(DB.backups.length>30) DB.backups=DB.backups.slice(DB.backups.length-30);
+  // keep last 10 snapshots (كانت 30 — قللناها عشان تقلل استهلاك مساحة المتصفح المحلية)
+  if(DB.backups.length>10) DB.backups=DB.backups.slice(DB.backups.length-10);
 }
 function restoreBackup(idx){
   const b=DB.backups[idx]; if(!b)return;
@@ -575,7 +604,7 @@ function restoreBackup(idx){
       const snap=safeParseSnap(b.snapshot,'restoreBackup#'+idx);
       Object.keys(snap).forEach(k=>{ DB[k]=snap[k]; });
       stampSync();
-      localStorage.setItem(KEY,JSON.stringify(DB));
+      saveDBToLocalStorage();
       forcePushNow();toast('تم الاسترجاع ورفعه للسحابة');go('dash');
     }catch(e){
       console.error('restoreBackup فشل:',e);
@@ -590,7 +619,7 @@ function downloadOneBackup(idx){
   a.download=`نسخة_الكوثر_${b.date}.json`;a.click();toast('تم تنزيل النسخة');
 }
 function delOneBackup(idx){
-  confirmBox('حذف هذه النسخة؟','',()=>{DB.backups.splice(idx,1);localStorage.setItem(KEY,JSON.stringify(DB));toast('تم الحذف','🗑️');renderView();});
+  confirmBox('حذف هذه النسخة؟','',()=>{DB.backups.splice(idx,1);saveDBToLocalStorage();toast('تم الحذف','🗑️');renderView();});
 }
 function downloadBackup(){
   const blob=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});
@@ -601,7 +630,7 @@ function downloadBackup(){
 function importBackup(){
   const inp=document.createElement('input');inp.type='file';inp.accept='.json';
   inp.onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();
-    r.onload=()=>{try{const imp=JSON.parse(r.result);DB=imp;localStorage.setItem(KEY,JSON.stringify(DB));forcePushNow();toast('تم الاستيراد ورفعه للسحابة');go('dash');}catch(err){toast('ملف غير صالح','⚠️');}};
+    r.onload=()=>{try{const imp=JSON.parse(r.result);DB=imp;saveDBToLocalStorage();forcePushNow();toast('تم الاستيراد ورفعه للسحابة');go('dash');}catch(err){toast('ملف غير صالح','⚠️');}};
     r.readAsText(f);};
   inp.click();
 }
@@ -1278,7 +1307,7 @@ function restoreEmergencySnap(i){
       const partial=safeParseSnap(s.data,'restoreEmergencySnap#'+i);
       DB={...DB,...partial};
       stampSync();
-      localStorage.setItem(KEY,JSON.stringify(DB));
+      saveDBToLocalStorage();
       forcePushNow();
       toast('✅ تم الاسترجاع ورفعه للسحابة');
       renderView();
@@ -1657,7 +1686,7 @@ function ensureBadawyRecipe(){
       DB.recipe[m][col] = VALUES[m] || 0;
     });
     if(typeof stampSync==='function') stampSync();
-    localStorage.setItem(KEY, JSON.stringify(DB));
+    saveDBToLocalStorage();
     try{ localStorage.setItem('feedmill_dirty','1'); }catch(e){}
     if(typeof refreshSyncHeader==='function') refreshSyncHeader();
     setTimeout(()=>{ if(typeof forcePushNow==='function') forcePushNow(); }, 800);
