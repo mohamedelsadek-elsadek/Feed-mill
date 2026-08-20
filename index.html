@@ -296,13 +296,16 @@ function acceptConflict(){
   confirmBox('استبدال ببيانات التحديث؟','هيتم استبدال بياناتك الحالية ('+c.myCount+' سجل) بالتحديث الجديد ('+c.rCount+' سجل). هنعمل نسخة من الحالي قبلها.',()=>{
     manualSnapshot('قبل قبول تحديث متعارض');
     try{
-      const remote=JSON.parse(c.data);
+      const remote=safeParseSnap(c.data,'acceptConflict');
       DB=remote; __mySeq=remote.__seq||0;
       localStorage.setItem(KEY,JSON.stringify(DB));
       localStorage.removeItem('feedmill_conflict');
       renderView(); refreshSyncHeader(); updateSyncBadge('ok');
       toast('تم الاستبدال');
-    }catch(e){ toast('فشل الاستبدال — البيانات تالفة'); }
+    }catch(e){
+      console.error('acceptConflict فشل:',e);
+      toast('فشل الاستبدال — '+(e&&e.message?e.message:'البيانات تالفة')+' (افتح كونسول المتصفح لمزيد من التفاصيل)','⚠️');
+    }
   });
 }
 
@@ -525,6 +528,18 @@ function farmTotals(from,to){
 function inRange(d,from,to){ if(from&&d<from)return false; if(to&&d>to)return false; return true; }
 
 /* ============ Backup ============ */
+/* تحليل آمن لأي بيانات نسخة/لقطة: تتعامل مع string أو object، وتسجّل الخطأ الحقيقي بالكونسول
+   عشان نعرف السبب الفعلي بدل ما نشوف بس "فشل" */
+function safeParseSnap(raw,label){
+  try{
+    if(raw==null) throw new Error('البيانات فاضية (undefined/null)');
+    if(typeof raw==='object') return raw;               /* اتفكّت خلاص، مفيش داعي لـ JSON.parse */
+    return JSON.parse(raw);
+  }catch(e){
+    console.error('safeParseSnap فشل ['+(label||'')+']:',e,'raw=',raw);
+    throw e;
+  }
+}
 function snapshotDB(){
   return JSON.stringify({
     feeds:DB.feeds,materials:DB.materials,recipe:DB.recipe,stores:DB.stores,farms:DB.farms,
@@ -555,11 +570,17 @@ function trimBackups(){
 function restoreBackup(idx){
   const b=DB.backups[idx]; if(!b)return;
   confirmBox('استرجاع هذه النسخة؟','هيتم استبدال البيانات الحالية ببيانات نسخة '+arDate(b.date)+'. (هنعمل نسخة من الحالي قبلها للأمان).',()=>{
-    manualSnapshot('قبل الاسترجاع');
-    const snap=JSON.parse(b.snapshot);
-    Object.keys(snap).forEach(k=>{ DB[k]=snap[k]; });
-    localStorage.setItem(KEY,JSON.stringify(DB));
-    forcePushNow();toast('تم الاسترجاع ورفعه للسحابة');go('dash');
+    try{
+      manualSnapshot('قبل الاسترجاع');
+      const snap=safeParseSnap(b.snapshot,'restoreBackup#'+idx);
+      Object.keys(snap).forEach(k=>{ DB[k]=snap[k]; });
+      stampSync();
+      localStorage.setItem(KEY,JSON.stringify(DB));
+      forcePushNow();toast('تم الاسترجاع ورفعه للسحابة');go('dash');
+    }catch(e){
+      console.error('restoreBackup فشل:',e);
+      toast('فشل الاسترجاع — '+(e&&e.message?e.message:'بيانات النسخة تالفة')+' (افتح كونسول المتصفح لمزيد من التفاصيل)','⚠️');
+    }
   });
 }
 function downloadOneBackup(idx){
@@ -1250,18 +1271,21 @@ function emergencySnapsHtml(){
 function restoreEmergencySnap(i){
   const snaps=allSnaps(); const s=snaps[i]; if(!s) return;
   let cnt=0;
-  try{ const d=JSON.parse(s.data); ['production','dispatch','matIncoming','matDispatch','opening','matOpen'].forEach(k=>cnt+=(d[k]||[]).length); }catch(e){}
+  try{ const d=safeParseSnap(s.data,'cnt#'+i); ['production','dispatch','matIncoming','matDispatch','opening','matOpen'].forEach(k=>cnt+=(d[k]||[]).length); }catch(e){}
   confirmBox('استرجاع نسخة '+esc(s.date)+'؟','فيها '+cnt+' سجل. هيتم استبدال بياناتك الحالية بيها (هنعمل نسخة من الحالي قبلها للأمان).',()=>{
     try{
       manualSnapshot('قبل استرجاع لقطة طوارئ');
-      const partial=JSON.parse(s.data);
+      const partial=safeParseSnap(s.data,'restoreEmergencySnap#'+i);
       DB={...DB,...partial};
       stampSync();
       localStorage.setItem(KEY,JSON.stringify(DB));
       forcePushNow();
       toast('✅ تم الاسترجاع ورفعه للسحابة');
       renderView();
-    }catch(e){ toast('فشل الاسترجاع — بيانات اللقطة تالفة'); }
+    }catch(e){
+      console.error('restoreEmergencySnap فشل:',e,'s=',s);
+      toast('فشل الاسترجاع — '+(e&&e.message?e.message:'بيانات اللقطة تالفة')+' (افتح كونسول المتصفح لمزيد من التفاصيل)','⚠️');
+    }
   });
 }
 function listCard(title,key,ph){
