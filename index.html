@@ -596,9 +596,20 @@ function trimBackups(){
   // keep last 10 snapshots (كانت 30 — قللناها عشان تقلل استهلاك مساحة المتصفح المحلية)
   if(DB.backups.length>10) DB.backups=DB.backups.slice(DB.backups.length-10);
 }
+/* تحذير قبل أي استرجاع يدوي لو النسخة المستهدفة فيها سجلات أقل بوضوح من الحالي —
+   عشان ميحصلش تاني إن نسخة "تاريخها أحدث" بس من جهاز متأخر تمسح بيانات أكتر بالغلط */
+function regressionWarningHtml(targetDb){
+  const myCount=totalRecords(DB), tCount=totalRecords(targetDb);
+  if(myCount>0 && tCount < myCount*0.8){
+    return '<div style="background:#fef2f2;border:1.5px solid #f87171;border-radius:10px;padding:12px;margin-bottom:14px;color:#b91c1c;font-weight:700;font-size:13px;line-height:1.7">⚠️ خطر فقدان بيانات: النسخة دي فيها '+tCount+' سجل بس، وبياناتك الحالية فيها '+myCount+' سجل. لو كملت، أي بيانات مسجلة في بياناتك الحالية ومش موجودة في النسخة دي هتتمسح. راجع العدد كويس قبل ما تأكّد.</div>';
+  }
+  return '';
+}
 function restoreBackup(idx){
   const b=DB.backups[idx]; if(!b)return;
-  confirmBox('استرجاع هذه النسخة؟','هيتم استبدال البيانات الحالية ببيانات نسخة '+arDate(b.date)+'. (هنعمل نسخة من الحالي قبلها للأمان).',()=>{
+  let snapPreview;
+  try{ snapPreview=safeParseSnap(b.snapshot,'preview#'+idx); }catch(e){ snapPreview=null; }
+  confirmBox('استرجاع هذه النسخة؟',(snapPreview?regressionWarningHtml(snapPreview):'')+'هيتم استبدال البيانات الحالية ببيانات نسخة '+arDate(b.date)+'. (هنعمل نسخة من الحالي قبلها للأمان).',()=>{
     try{
       manualSnapshot('قبل الاسترجاع');
       const snap=safeParseSnap(b.snapshot,'restoreBackup#'+idx);
@@ -1299,9 +1310,9 @@ function emergencySnapsHtml(){
 }
 function restoreEmergencySnap(i){
   const snaps=allSnaps(); const s=snaps[i]; if(!s) return;
-  let cnt=0;
-  try{ const d=safeParseSnap(s.data,'cnt#'+i); ['production','dispatch','matIncoming','matDispatch','opening','matOpen'].forEach(k=>cnt+=(d[k]||[]).length); }catch(e){}
-  confirmBox('استرجاع نسخة '+esc(s.date)+'؟','فيها '+cnt+' سجل. هيتم استبدال بياناتك الحالية بيها (هنعمل نسخة من الحالي قبلها للأمان).',()=>{
+  let cnt=0, partialPreview=null;
+  try{ partialPreview=safeParseSnap(s.data,'cnt#'+i); ['production','dispatch','matIncoming','matDispatch','opening','matOpen'].forEach(k=>cnt+=(partialPreview[k]||[]).length); }catch(e){}
+  confirmBox('استرجاع نسخة '+esc(s.date)+'؟',(partialPreview?regressionWarningHtml({...DB,...partialPreview}):'')+'فيها '+cnt+' سجل. هيتم استبدال بياناتك الحالية بيها (هنعمل نسخة من الحالي قبلها للأمان).',()=>{
     try{
       manualSnapshot('قبل استرجاع لقطة طوارئ');
       const partial=safeParseSnap(s.data,'restoreEmergencySnap#'+i);
