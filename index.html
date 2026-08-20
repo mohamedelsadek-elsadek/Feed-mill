@@ -220,7 +220,7 @@ function load(){
   if(!DB.roles||typeof DB.roles!=='object') DB.roles=f.roles||{};
   for(const k in f){ if(DB[k]===undefined) DB[k]=f[k]; }
 }
-const APP_VERSION='v38 — إصلاح ترحيل التركيبة';
+const APP_VERSION='v39 — تركيبة البدوي مضمونة';
 // دمج ذكي: يوحّد السجلات من غير ما يحذف أي حاجة من الطرفين
 function recKey(r){ return JSON.stringify(r); }
 function mergeArrays(a,b){
@@ -665,7 +665,7 @@ function renderShell(){
   $('#app').innerHTML=`
   <div class="hero">
     <div class="hero-top">
-      <div><h1>🏭 مصنع الكوثر للأعلاف</h1><p>نظام الإدارة الشامل · <span style="font-weight:800">v38</span> · <span id="syncBadge" style="font-weight:700">☁️ متزامن</span><br><span id="syncInfo" style="font-size:11px;opacity:.9">تحديث #0</span><br><span style="font-size:11px;opacity:.95">👤 ${currentUser?currentUser.name:""} · ${currentUser&&DB.roles[currentUser.role]?DB.roles[currentUser.role].label:""}</span></p></div>
+      <div><h1>🏭 مصنع الكوثر للأعلاف</h1><p>نظام الإدارة الشامل · <span style="font-weight:800">v39</span> · <span id="syncBadge" style="font-weight:700">☁️ متزامن</span><br><span id="syncInfo" style="font-size:11px;opacity:.9">تحديث #0</span><br><span style="font-size:11px;opacity:.95">👤 ${currentUser?currentUser.name:""} · ${currentUser&&DB.roles[currentUser.role]?DB.roles[currentUser.role].label:""}</span></p></div>
       <div class="hero-actions">
         <button class="hbtn" onclick="downloadBackup()" title="نسخة احتياطية">💾</button>
         <button class="hbtn" onclick="exportExcel()" title="تصدير">📤</button>
@@ -1613,38 +1613,46 @@ function exportExcel(){
 /* ===== إضافة تركيبة "د محمد البدوي" — مرة واحدة فقط، حتى لو فيه بيانات محفوظة ===== */
 function ensureBadawyRecipe(){
   try{
-    if(!DB || !Array.isArray(DB.feeds) || !Array.isArray(DB.materials)) return;
-    if(DB.__badawyAdded) return;                 /* اتضافت قبل كده */
+    if(!DB || !Array.isArray(DB.feeds) || !Array.isArray(DB.materials)) return false;
     const NAME='د محمد البدوي';
-    if(DB.feeds.includes(NAME)){ DB.__badawyAdded=true; return; }
+    /* مفيش أي علامة — الفحص الوحيد: التركيبة موجودة ولا لأ. فده بيشتغل كل مرة
+       ومستحيل يتعطّل بسبب علامة قديمة اتسجّلت في نسخة سابقة. */
+    if(DB.feeds.indexOf(NAME)>-1) return false;
     const VALUES={ 'ذره':651, 'صويا':300, 'مركزات':33, 'زيت':8, 'مونو':8 };
-    /* اتأكد إن كل الخامات المطلوبة موجودة، وضيف اللي ناقص */
     Object.keys(VALUES).forEach(m=>{
-      if(!DB.materials.includes(m)){
+      if(DB.materials.indexOf(m)===-1){
         DB.materials.push(m);
         DB.recipe[m]=new Array(DB.feeds.length).fill(0);
       }
     });
-    /* ضيف العمود الجديد */
     DB.feeds.push(NAME);
     const col=DB.feeds.length-1;
     DB.materials.forEach(m=>{
       if(!Array.isArray(DB.recipe[m])) DB.recipe[m]=[];
-      while(DB.recipe[m].length < col) DB.recipe[m].push(0);   /* سدّ أي فجوات */
+      while(DB.recipe[m].length < col) DB.recipe[m].push(0);
       DB.recipe[m][col] = VALUES[m] || 0;
     });
-    DB.__badawyAdded=true;
-    /* لازم يتختم ويترفع — من غير كده أول تحديث من السحابة هيدهسه فورًا */
     if(typeof stampSync==='function') stampSync();
     localStorage.setItem(KEY, JSON.stringify(DB));
     try{ localStorage.setItem('feedmill_dirty','1'); }catch(e){}
-    setTimeout(()=>{ if(typeof forcePushNow==='function') forcePushNow(); }, 1500);
-    setTimeout(()=>{ if(typeof toast==='function') toast('✅ اتضافت تركيبة "د محمد البدوي" — مجموعها 1000'); }, 1800);
-  }catch(e){ console.error('ensureBadawyRecipe:',e); }
+    if(typeof refreshSyncHeader==='function') refreshSyncHeader();
+    setTimeout(()=>{ if(typeof forcePushNow==='function') forcePushNow(); }, 800);
+    setTimeout(()=>{ if(typeof toast==='function') toast('✅ اتضافت تركيبة "د محمد البدوي" — مجموعها 1000'); }, 1200);
+    return true;
+  }catch(e){ console.error('ensureBadawyRecipe:',e); return false; }
+}
+/* حارس: يتأكد كل شوية إن التركيبة لسه موجودة — لو أي جهاز قديم مسحها، يرجّعها فورًا */
+function guardBadawyRecipe(){
+  try{
+    if(!DB||!Array.isArray(DB.feeds)) return;
+    if(DB.feeds.indexOf('د محمد البدوي')===-1){
+      if(ensureBadawyRecipe() && typeof renderView==='function' && active==='recipe') renderView();
+    }
+  }catch(e){}
 }
 
 /* ============ Init ============ */
-load(); ensureBadawyRecipe(); renderApp(); updateSyncBadge('ok'); startSync(); loadHtml2pdf(); initTabConflictDetector(); setTimeout(checkForNewerVersion,3000); setInterval(checkForNewerVersion,60000); window.addEventListener('online',()=>{updateSyncBadge('ok');cloudPush();checkForNewerVersion();}); window.addEventListener('offline',()=>updateSyncBadge('off'));
+load(); ensureBadawyRecipe(); renderApp(); updateSyncBadge('ok'); startSync(); loadHtml2pdf(); initTabConflictDetector(); setTimeout(checkForNewerVersion,3000); setInterval(checkForNewerVersion,60000); setTimeout(guardBadawyRecipe,4000); setInterval(guardBadawyRecipe,20000); window.addEventListener('online',()=>{updateSyncBadge('ok');cloudPush();checkForNewerVersion();}); window.addEventListener('offline',()=>updateSyncBadge('off'));
 
 </script>
 </body>
