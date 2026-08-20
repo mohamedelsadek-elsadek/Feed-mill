@@ -220,7 +220,7 @@ function load(){
   if(!DB.roles||typeof DB.roles!=='object') DB.roles=f.roles||{};
   for(const k in f){ if(DB[k]===undefined) DB[k]=f[k]; }
 }
-const APP_VERSION='v35 — كاشف التحديث التلقائي';
+const APP_VERSION='v36 — إصلاح جذري للتركيبة';
 // دمج ذكي: يوحّد السجلات من غير ما يحذف أي حاجة من الطرفين
 function recKey(r){ return JSON.stringify(r); }
 function mergeArrays(a,b){
@@ -663,7 +663,7 @@ function renderShell(){
   $('#app').innerHTML=`
   <div class="hero">
     <div class="hero-top">
-      <div><h1>🏭 مصنع الكوثر للأعلاف</h1><p>نظام الإدارة الشامل · <span style="font-weight:800">v35</span> · <span id="syncBadge" style="font-weight:700">☁️ متزامن</span><br><span id="syncInfo" style="font-size:11px;opacity:.9">تحديث #0</span><br><span style="font-size:11px;opacity:.95">👤 ${currentUser?currentUser.name:""} · ${currentUser&&DB.roles[currentUser.role]?DB.roles[currentUser.role].label:""}</span></p></div>
+      <div><h1>🏭 مصنع الكوثر للأعلاف</h1><p>نظام الإدارة الشامل · <span style="font-weight:800">v36</span> · <span id="syncBadge" style="font-weight:700">☁️ متزامن</span><br><span id="syncInfo" style="font-size:11px;opacity:.9">تحديث #0</span><br><span style="font-size:11px;opacity:.95">👤 ${currentUser?currentUser.name:""} · ${currentUser&&DB.roles[currentUser.role]?DB.roles[currentUser.role].label:""}</span></p></div>
       <div class="hero-actions">
         <button class="hbtn" onclick="downloadBackup()" title="نسخة احتياطية">💾</button>
         <button class="hbtn" onclick="exportExcel()" title="تصدير">📤</button>
@@ -1083,21 +1083,42 @@ function forceReloadFresh(){
 }
 
 function bindRecipeInputs(){
-  document.querySelectorAll('.rcp-in').forEach(inp=>{
-    if(inp._bound) return; inp._bound=true;
-    inp.addEventListener('input',()=>{
-      const conv=toEnDigits(inp.value);
-      if(conv!==inp.value){ const pos=inp.selectionStart; inp.value=conv; try{inp.setSelectionRange(pos,pos);}catch(e){} }
-      const m=inp.dataset.mat, i=+inp.dataset.i;
-      if(!requirePerm('recipe')) return;
-      if(!DB.recipe[m]) DB.recipe[m]=new Array(DB.feeds.length).fill(0);
-      DB.recipe[m][i]=+inp.value||0;
-      save();
-      /* حدّث خانة الإجمالي بتاعة العمود ده بس */
-      let s=0; DB.materials.forEach(mm=>s+=+(DB.recipe[mm]&&DB.recipe[mm][i])||0);
-      const totCell=document.querySelector('.rcp-tot[data-fcol="'+i+'"]');
-      if(totCell){ totCell.textContent=fmt(s); totCell.style.color=Math.abs(s-1000)<1?'#22c55e':'#f59e0b'; }
-    });
+  /* ربط على مستوى الحاوية (event delegation) — بيشتغل مع أي خانة موجودة دلوقتي
+     أو هتتضاف بعدين، فمش بيتكسر لما الجدول يتعاد رسمه */
+  const host=document.getElementById('wrap');
+  if(!host || host._recipeBound) return;
+  host._recipeBound=true;
+  host.addEventListener('input', function(ev){
+    const inp=ev.target;
+    if(!inp || !inp.classList || !inp.classList.contains('rcp-in')) return;
+    const conv=toEnDigits(inp.value);
+    if(conv!==inp.value){
+      const pos=inp.selectionStart;
+      inp.value=conv;
+      try{inp.setSelectionRange(pos,pos);}catch(e){}
+    }
+    const m=inp.getAttribute('data-mat'), i=+inp.getAttribute('data-i');
+    /* لو الصلاحية مرفوضة، قول للمستخدم بوضوح ورجّع القيمة القديمة — بدل ما يفضل يكتب
+       والحفظ بيترفض بصمت فيكتشف بعد الريفرش إن كل شغله راح */
+    if(!can('recipe') && !can('all') && !isSuper()){
+      inp.value=(DB.recipe[m]&&DB.recipe[m][i])||0;
+      if(!window.__permWarned){
+        window.__permWarned=true;
+        toast('⛔ مالكش صلاحية تعديل التركيبات — سجّل دخول بحساب له صلاحية','⚠️');
+        setTimeout(()=>{window.__permWarned=false;},4000);
+      }
+      return;
+    }
+    if(!DB.recipe[m]) DB.recipe[m]=new Array(DB.feeds.length).fill(0);
+    DB.recipe[m][i]=+inp.value||0;
+    save();
+    /* حدّث خانة الإجمالي للعمود ده */
+    let s=0; DB.materials.forEach(mm=>s+=+(DB.recipe[mm]&&DB.recipe[mm][i])||0);
+    const totCell=document.querySelector('.rcp-tot[data-fcol="'+i+'"]');
+    if(totCell){
+      totCell.textContent=fmt(s);
+      totCell.style.color=Math.abs(s-1000)<1?'#22c55e':'#f59e0b';
+    }
   });
 }
 function updRecipe(m,i,v){ if(!requirePerm('recipe'))return;if(!DB.recipe[m])DB.recipe[m]=new Array(DB.feeds.length).fill(0);DB.recipe[m][i]=+v||0;save();toast('تم تحديث التركيبة');renderView();}
