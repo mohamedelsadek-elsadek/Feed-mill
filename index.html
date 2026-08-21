@@ -645,6 +645,43 @@ function importBackup(){
     r.readAsText(f);};
   inp.click();
 }
+/* استيراد جزئي: بيضيف سجلات (تصنيع/صرف/وارد خامات) فوق البيانات الحالية من غير ما يمسح
+   أي حاجة تانية (مستخدمين، أعلاف، تركيبات، سجلات موجودة). بيتجنب تكرار نفس السجل بالظبط لو
+   اتعمل استيراد لنفس الملف مرتين بالغلط. */
+function importPartialData(){
+  const inp=document.createElement('input');inp.type='file';inp.accept='.json';
+  inp.onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();
+    r.onload=()=>{
+      try{
+        const imp=JSON.parse(r.result);
+        const arrs=['production','dispatch','matIncoming','matDispatch'];
+        let added=0, skippedDup=0;
+        confirmBox('دمج البيانات الناقصة؟','هيتم إضافة السجلات الموجودة في الملف فوق بياناتك الحالية (من غير ما يمسح أي حاجة). لو سجل موجود بالظبط هيتجاهل عشان ميتكررش.',()=>{
+          manualSnapshot('قبل دمج بيانات ناقصة');
+          arrs.forEach(k=>{
+            if(!Array.isArray(imp[k])) return;
+            if(!Array.isArray(DB[k])) DB[k]=[];
+            const existing=new Set(DB[k].map(r=>JSON.stringify(r)));
+            imp[k].forEach(rec=>{
+              const sig=JSON.stringify(rec);
+              if(existing.has(sig)){ skippedDup++; return; }
+              DB[k].push(rec); existing.add(sig); added++;
+            });
+          });
+          stampSync();
+          saveDBToLocalStorage();
+          forcePushNow();
+          toast('✅ تم دمج '+added+' سجل'+(skippedDup?(' (اتجاهل '+skippedDup+' مكرر)'):''));
+          go('dash');
+        });
+      }catch(err){
+        console.error('importPartialData فشل:',err);
+        toast('ملف غير صالح — '+(err&&err.message?err.message:''),'⚠️');
+      }
+    };
+    r.readAsText(f);};
+  inp.click();
+}
 
 /* ============ Shell ============ */
 /* ============ Auth & Permissions ============ */
@@ -1265,6 +1302,8 @@ function vSettings(){
   <div class="card"><h3><span class="d" style="background:#ef4444"></span>البيانات والنسخ الاحتياطي</h3>
     <div class="row2"><button class="btn btn-ghost" onclick="downloadBackup()">💾 نسخة احتياطية</button>
     <button class="btn btn-ghost" onclick="importBackup()">📂 استرجاع</button></div>
+    <button class="btn btn-pri btn-block" style="margin-top:10px" onclick="importPartialData()">🧩 دمج بيانات ناقصة (من ملف)</button>
+    <p class="hint" style="margin-top:6px">ده بيضيف سجلات (تصنيع/صرف/وارد خامات) فوق بياناتك الحالية من غير ما يمسح حاجة — مفيد لو فيه أيام ضايعة وعايز ترجّعها من ملف منفصل.</p>
     <p class="hint" style="margin:10px 0">النسخ التلقائي شغّال: نسخة يومية تُحفظ داخل النظام وتتنظّف بعد 30 يوم (${DB.backups.length} نسخة محفوظة).</p>
     <button class="btn btn-danger btn-block" onclick="resetData()">🗑️ تصفير كل البيانات (بكلمة سر)</button></div>`;
 }
