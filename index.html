@@ -177,6 +177,14 @@ window.__fb = {
 window.dispatchEvent(new Event("fb-ready"));
 </script>
 </head><body>
+<div id="movedBanner" style="position:fixed;top:0;left:0;right:0;z-index:9999;background:#b91c1c;color:#fff;padding:10px 14px calc(10px);padding-top:calc(10px + env(safe-area-inset-top));display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;box-shadow:0 4px 14px rgba(0,0,0,.3);font-family:-apple-system,'Segoe UI',Tahoma,sans-serif">
+  <div style="font-weight:800;font-size:14px;line-height:1.5">⛔ النظام ده اتنقل — متسجلش فيه أي حاجة.<br><span style="font-weight:600;font-size:12px;opacity:.95">استخدم النظام الجديد لمصنع الكوثر. النسخة دي للرجوع للأرقام القديمة بس.</span></div>
+  <a href="https://mohamedelsadek-elsadek.github.io/Apps/feedmill-erp.html" style="background:#fff;color:#b91c1c;font-weight:800;font-size:14px;padding:9px 16px;border-radius:10px;text-decoration:none;white-space:nowrap">افتح النظام الجديد ←</a>
+</div>
+<script>
+(function(){function fit(){var b=document.getElementById('movedBanner');if(!b)return;var h=b.offsetHeight;document.body.style.paddingTop=h+'px';var st=document.getElementById('movedStyle');if(!st){st=document.createElement('style');st.id='movedStyle';document.head.appendChild(st);}st.textContent='.hero{top:'+h+'px!important}#updateBanner{top:'+h+'px!important}';}
+window.addEventListener('resize',fit);window.addEventListener('load',fit);setTimeout(fit,0);setInterval(fit,2000);})();
+</script>
 <div id="app"></div>
 <div class="toast" id="toast"></div>
 <div class="modal" id="modal"><div class="modal-box" id="modalBox"></div></div>
@@ -220,7 +228,7 @@ function load(){
   if(!DB.roles||typeof DB.roles!=='object') DB.roles=f.roles||{};
   for(const k in f){ if(DB[k]===undefined) DB[k]=f[k]; }
 }
-const APP_VERSION='v39 — تركيبة البدوي مضمونة';
+const APP_VERSION='v39.1 — اتنقل للنظام الجديد';
 // دمج ذكي: يوحّد السجلات من غير ما يحذف أي حاجة من الطرفين
 function recKey(r){ return JSON.stringify(r); }
 function mergeArrays(a,b){
